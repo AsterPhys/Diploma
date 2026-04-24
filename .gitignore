@@ -361,3 +361,15 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# -----------------------
+
+# Виртуальное окружение
+env/
+
+# Папка с датасетом
+Landing/data/
+
+# Модели
+RL_agent/models/
+RL_agent/ppo_drone_tensorboard/

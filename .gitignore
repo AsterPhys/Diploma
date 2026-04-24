@@ -373,3 +373,5 @@ Landing/data/
 # Модели
 RL_agent/models/
 RL_agent/ppo_drone_tensorboard/
+/Landing/data_saved
+/Landing/data_saved_2

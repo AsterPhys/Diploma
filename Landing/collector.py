@@ -11,27 +11,9 @@ class DataCollector:
 	def __init__(self):
 		self.client = airsim.MultirotorClient()
 		self.client.confirmConnection()
-
-		print("[COLLECTOR] Настройка классов сегментации AirSim...")
-		# 0. Сбрасываем все в класс 0 (черный цвет - unknown/background).
-		# На случай, если случайно пропущен какой-то мелкий проп и у него нет префикса, 
-		# он стал черным (опасным), а не слился с безопасной землей.
-		# Ну и + фон (небо) черный.
-		self.client.simSetSegmentationObjectID(".*", 0, is_name_regex=True)
-		# 1. Static_Obstacle -> 1
-		self.client.simSetSegmentationObjectID(".*Static_Obstacle.*", 1, is_name_regex=True)
-		# 2. Dynamic_Obstacle -> 2
-		self.client.simSetSegmentationObjectID(".*Dynamic_Obstacle.*", 2, is_name_regex=True)
-		# 3. Hazard -> 3
-		self.client.simSetSegmentationObjectID(".*Hazard.*", 3, is_name_regex=True)
-		# 4. Vegetation -> 4
-		self.client.simSetSegmentationObjectID(".*Vegetation.*", 4, is_name_regex=True)
-		# 5. Safe_Ground -> 5
-		self.client.simSetSegmentationObjectID(".*Safe_Ground.*", 5, is_name_regex=True)
-		# фикс бага с декалями
-		self.client.simSetSegmentationObjectID(".*Decal.*", 0, is_name_regex=True)
-		print("[COLLECTOR] Классы сегментации успешно назначены!")
 		
+		self.client.simEnableWeather(True)
+
 		os.makedirs(config.RGB_DIR, exist_ok=True)
 		os.makedirs(config.DEPTH_DIR, exist_ok=True)
 		os.makedirs(config.MASK_DIR, exist_ok=True)
@@ -47,6 +29,14 @@ class DataCollector:
 		# попала ли она в область
 		self.min_x, self.min_y = np.min(self.polygon, axis=0)
 		self.max_x, self.max_y = np.max(self.polygon, axis=0)
+
+		# Аналогично для hotzone
+		self.hotzone = np.array(config.HOTZONE_POLYGON, dtype=np.float32)
+		self.hz_min_x, self.hz_min_y = np.min(self.hotzone, axis=0)
+		self.hz_max_x, self.hz_max_y = np.max(self.hotzone, axis=0)
+
+		# Переменная для хранения предыдущего кадра
+		self.prev_img_rgb = None
 
 	def randomize_environment(self):
 		"""Меняет освещение и параметры погоды в симуляторе"""
@@ -96,13 +86,18 @@ class DataCollector:
 	def get_random_pose(self):
 		"""Генерирует случайную позицию СТРОГО внутри полигона карты"""
 		
+		use_hotzone = random.random() < config.HOTZONE_PROBABILITY
+		target_poly = self.hotzone if use_hotzone else self.polygon
+		min_x, max_x = (self.hz_min_x, self.hz_max_x) if use_hotzone else (self.min_x, self.max_x)
+		min_y, max_y = (self.hz_min_y, self.hz_max_y) if use_hotzone else (self.min_y, self.max_y)
+
 		while True:
-			x = random.uniform(self.min_x, self.max_x)
-			y = random.uniform(self.min_y, self.max_y)
+			x = random.uniform(min_x, max_x)
+			y = random.uniform(min_y, max_y)
 			
 			# Проверяем расстояние до ближайшей границы полигона.
 			# Положительное число означает, что точка внутри.
-			dist = cv2.pointPolygonTest(self.polygon, (x, y), measureDist=True)
+			dist = cv2.pointPolygonTest(target_poly, (x, y), measureDist=True)
 
 			# Если мы внутри полигона И расстояние до стены больше безопасного отступа
 			if dist >= config.SAFE_MARGIN:
@@ -119,6 +114,16 @@ class DataCollector:
 		
 		return airsim.Pose(position, orientation)
 
+	def is_duplicate(self, current_img):
+		"""Проверяет, является ли кадр дубликатом предыдущего."""
+		if self.prev_img_rgb is None:
+			return False
+		
+		# Сравниваем среднюю абсолютную разницу пикселей.
+		# Если разница < 1.0, значит кадры почти идентичны.
+		diff = np.mean(np.abs(current_img.astype(np.float32) - self.prev_img_rgb.astype(np.float32)))
+		return diff < 1.0
+
 	def collect_data(self, num_samples):
 		print(f"Начинаем сбор {num_samples} кадров...")
 		
@@ -128,23 +133,40 @@ class DataCollector:
 			# --- WARM-UP ---
 			print("[COLLECTOR] Прогрев симулятора и инициализация камеры...")
 			warmup_pose = self.get_random_pose()
+			warmup_pose.position.z_val = -100.0  # чтобы дрон точно не был в другом объекте
 			self.client.simSetVehiclePose(warmup_pose, ignore_collision=True)
 			
 			if config.ENABLE_ENV_RANDOMIZATION:
 				self.randomize_environment()
 			
 			self.client.simContinueForFrames(30)
+			print("[COLLECTOR] Сброс буферов (холостой снимок)...")
 			self.client.simGetImages([
-				airsim.ImageRequest(config.CAMERA_NAME, airsim.ImageType.Scene, False, False)
+				airsim.ImageRequest(config.CAMERA_NAME, airsim.ImageType.Scene, False, False),
+				airsim.ImageRequest(config.CAMERA_NAME, airsim.ImageType.DepthPlanar, True, False),
+				airsim.ImageRequest(config.CAMERA_NAME, airsim.ImageType.Segmentation, False, False)
 			])
 			print("[COLLECTOR] Прогрев завершен. Начинаем запись.")
 
-			for i in range(num_samples):
+			saved_count = 0  # счетчик успешных кадров
+			total_pixels = config.IMAGE_WIDTH * config.IMAGE_HEIGHT
+
+			while saved_count < num_samples:
+				# Меняем погоду каждые N кадров
+				if config.ENABLE_ENV_RANDOMIZATION and saved_count % config.ENV_UPDATE_FREQUENCY == 0:
+					self.randomize_environment()
+				
 				pose = self.get_random_pose()
 				self.client.simSetVehiclePose(pose, ignore_collision=True)
 				
 				# Прокручиваем симуляцию
 				self.client.simContinueForFrames(1)
+
+				# Проверка коллизии (если дрон внутри меша)
+				collision_info = self.client.simGetCollisionInfo()
+				if collision_info.has_collided:
+					print(f"[{saved_count + 1}/{num_samples}] Пропуск: спавн внутри геометрии (коллизия).")
+					continue
 
 				# Запрашиваем 3 картинки
 				responses = self.client.simGetImages([
@@ -153,35 +175,66 @@ class DataCollector:
 					airsim.ImageRequest(config.CAMERA_NAME, airsim.ImageType.Segmentation, False, False)
 				])
 
-				# --> Сохраняем RGB
+				# Проверка на пустые ответы от AirSim
+				if any(r.image_data_uint8 is None and r.image_data_float is None for r in responses):
+					continue
+
+				# --> RGB
 				img1d = np.frombuffer(responses[0].image_data_uint8, dtype=np.uint8)
 				img_rgb = img1d.reshape(responses[0].height, responses[0].width, 3)
-				cv2.imwrite(os.path.join(config.RGB_DIR, f"{i:05d}.png"), img_rgb)
+				
+				# Проверка на то, что большая часть изображения - черная.
+				black_pixels = np.sum(np.all(img_rgb == [0, 0, 0], axis=-1))
+				if (black_pixels / total_pixels) > 0.70:
+					print(f"[{saved_count + 1}/{num_samples}] Пропуск: большой процент черного цвета.")
+					continue
+				
+				# Проверка на дубликат
+				if self.is_duplicate(img_rgb):
+					print(f"[{saved_count + 1}/{num_samples}] Пропуск: обнаружен дубликат кадра.")
+					continue
 
-				# --> Сохраняем Depth
+				self.prev_img_rgb = img_rgb.copy()
+
+				# --> Depth
 				depth_img = airsim.list_to_2d_float_array(responses[1].image_data_float, responses[1].width, responses[1].height)
-				np.save(os.path.join(config.DEPTH_DIR, f"{i:05d}.npy"), depth_img)
 
-				# --> Сохраняем визуализацию карты глубины
+				# Если минимальная дистанция до объекта меньше заявленной,
+				# то нам такое не надо
+				if np.min(depth_img) < 0.5:
+					print(f"[{saved_count + 1}/{num_samples}] Пропуск: камера в упор к текстуре/внутри меша (Depth < 0.01м).")
+					continue
+
+				# --> Segmentation
+				mask1d = np.frombuffer(responses[2].image_data_uint8, dtype=np.uint8)
+				img_mask_rgb = mask1d.reshape(responses[2].height, responses[2].width, 3)
+
+				# Проверка на черный цвет на маске (неразмеченные объекты)
+				has_black = np.any(np.all(img_mask_rgb == [0, 0, 0], axis=-1))
+				if has_black:
+					print(f"[{saved_count + 1}/{num_samples}] Пропуск: обнаружен неразмеченный черный цвет (глючный кадр).")
+					continue
+
+				unique_colors = np.unique(img_mask_rgb.reshape(-1, 3), axis=0)
+				print(f"Уникальные цвета на кадре: {unique_colors.tolist()}")
+
+				# --> Визуализация карты глубины
 				# Нормализуем массив (переводим float метры в диапазон 0-255).
 				depth_norm = cv2.normalize(depth_img, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX)
 				depth_vis = np.uint8(depth_norm)
 				# Применяем тепловую карту для красоты.
 				# Близкие объекты будут синими, средние - зелеными/желтыми, далекие - красными.
 				depth_colormap = cv2.applyColorMap(depth_vis, cv2.COLORMAP_JET)
-				cv2.imwrite(os.path.join(config.DEPTH_VIS_DIR, f"{i:05d}.png"), depth_colormap)
 
-				# --> Сохраняем Segmentation
-				mask1d = np.frombuffer(responses[2].image_data_uint8, dtype=np.uint8)
-				img_mask_rgb = mask1d.reshape(responses[2].height, responses[2].width, 3)
-				cv2.imwrite(os.path.join(config.MASK_VIS_DIR, f"{i:05d}.png"), img_mask_rgb)
+				# --> Сохранение
+				cv2.imwrite(os.path.join(config.RGB_DIR, f"{saved_count:05d}.png"), img_rgb)
+				np.save(os.path.join(config.DEPTH_DIR, f"{saved_count:05d}.npy"), depth_img)
+				cv2.imwrite(os.path.join(config.DEPTH_VIS_DIR, f"{saved_count:05d}.png"), depth_colormap)
+				cv2.imwrite(os.path.join(config.MASK_VIS_DIR, f"{saved_count:05d}.png"), img_mask_rgb)
 
-				unique_colors = np.unique(img_mask_rgb.reshape(-1, img_mask_rgb.shape[2]), axis=0)
-				print(f"Уникальные цвета в маске:\n{unique_colors}")
-
-				if i % 100 == 0:
-					print(f"Собрано {i}/{num_samples}...")
-
+				saved_count += 1
+				print(f"[УСПЕХ] Сохранен кадр {saved_count}/{num_samples}")
+				
 		finally:
 			self.client.simPause(False)
 

@@ -35,7 +35,7 @@ def get_preset(mode):
 		})
 	elif mode in ["collect", "land"]:
 		view_mode = "NoDisplay" if mode == "collect" else "SpringArmChase"
-		clock_speed = 5.0 if mode == "collect" else 1.0
+		clock_speed = 1.0 if mode == "collect" else 1.0
 
 		base_settings.update({
 			"SegmentationSettings": {

@@ -376,3 +376,4 @@ RL_agent/ppo_drone_tensorboard/
 /Landing/data_saved
 /Landing/data_saved_2
 /Landing/data_saved_3
+/neuro_env

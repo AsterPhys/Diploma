@@ -35,7 +35,7 @@ def get_preset(mode):
 		})
 	elif mode in ["collect", "land"]:
 		view_mode = "NoDisplay" if mode == "collect" else "SpringArmChase"
-		clock_speed = 1.0 if mode == "collect" else 1.0
+		clock_speed = 5.0 if mode == "collect" else 1.0
 
 		base_settings.update({
 			"SegmentationSettings": {
@@ -52,9 +52,9 @@ def get_preset(mode):
 							"X": 0, "Y": 0, "Z": 0.2, # немного смещаем камеру вниз от центра дрона
 							"Pitch": -90.0, "Roll": 0.0, "Yaw": 0.0,
 							"CaptureSettings":[
-								{ "ImageType": 0, "Width": 1024, "Height": 768, "FOV_Degrees": 90 }, # RGB
-								{ "ImageType": 1, "Width": 1024, "Height": 768, "FOV_Degrees": 90 }, # Depth
-								{ "ImageType": 5, "Width": 1024, "Height": 768, "FOV_Degrees": 90 }  # Mask
+								{ "ImageType": 0, "Width": 640, "Height": 480, "FOV_Degrees": 90 }, # RGB
+								{ "ImageType": 1, "Width": 640, "Height": 480, "FOV_Degrees": 90 }, # Depth
+								{ "ImageType": 5, "Width": 640, "Height": 480, "FOV_Degrees": 90 }  # Mask
 							]
 						}
 					}

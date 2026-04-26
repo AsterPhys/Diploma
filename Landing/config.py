@@ -21,7 +21,11 @@ MAP_NAME = "DowntownWestLevel2"
 UE_PROCESS_NAME = "UnrealEditor.exe"
 TIME2WAIT = 20
 
-# --- НАСТРОЙКИ СБОРА ДАННЫХ ---
+# --- ПАРАМЕТРЫ СЕТКИ (GRID SPAWN) ---
+GRID_STEP = 5.0     # Шаг сетки в метрах
+GRID_JITTER = 2.0   # Случайное отклонение от узла сетки
+
+# --- СБОР ДАННЫХ ---
 DATASET_SIZE = 10_000
 # Отступ от стен полигона при спавне (в метрах)
 # Гарантирует, что дрон не появится вплотную к стене
@@ -47,19 +51,19 @@ HOTZONE_POLYGON = [
 # Вероятность спавна в Hotzone
 HOTZONE_PROBABILITY = 0.7
 
-Z_MIN, Z_MAX = -0.5 + 1, -10.0 + 1 # учтено, что PlayerStart на высоте 1 м
+Z_MIN, Z_MAX = -0.5 + 1, -30.0 + 1 # учтено, что PlayerStart на высоте 1 м
 ROLL_PITCH_NOISE = 5.0  
 
 # --- ПАРАМЕТРЫ КАМЕРЫ ---
 CAMERA_NAME = "bottom_center"
-IMAGE_WIDTH = 1024
-IMAGE_HEIGHT = 768
+IMAGE_WIDTH = 640
+IMAGE_HEIGHT = 480
 CAMERA_FOV_DEG = 90.0
 
 # --- АУГМЕНТАЦИИ СРЕДЫ (ПОГОДА И ВРЕМЯ СУТОК) ---
 ENABLE_ENV_RANDOMIZATION = True
-ENV_UPDATE_FREQUENCY = 10  # менять погоду и время каждые ... кадров
+ENV_UPDATE_FREQUENCY = 50  # менять погоду и время каждые ... кадров
 
 # Диапазон времени суток
-TIME_OF_DAY_MIN = 8
-TIME_OF_DAY_MAX = 17
+TIME_OF_DAY_MIN = 5
+TIME_OF_DAY_MAX = 21

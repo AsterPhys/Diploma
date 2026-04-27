@@ -4,6 +4,8 @@ import time
 import sys
 import psutil
 import argparse
+import json
+from datetime import datetime
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(BASE_DIR)
@@ -11,6 +13,7 @@ sys.path.append(ROOT_DIR)
 
 from settings_manager import ensure_settings
 import config
+import config_train
 
 def kill_unreal():
     print("[MANAGER] Убиваем процесс Unreal Engine (если запущен)...")
@@ -35,34 +38,47 @@ def start_unreal():
     time.sleep(config.TIME2WAIT)
 
 def main():
-    parser = argparse.ArgumentParser(description="Автоматический менеджер (Сбор/Обучение/Посадка)")
-    parser.add_argument('--mode', type=str, choices=['collect', 'train', 'land'], required=True)
-    args = parser.parse_args()
+	parser = argparse.ArgumentParser(description="Автоматический менеджер (Сбор/Обучение/Посадка)")
+	parser.add_argument('--mode', type=str, choices=['collect', 'train', 'land'], required=True)
+	args = parser.parse_args()
 
-    print(f"=== АВТОМАТИЧЕСКИЙ МЕНЕДЖЕР (РЕЖИМ: {args.mode.upper()}) ===")
+	print(f"=== АВТОМАТИЧЕСКИЙ МЕНЕДЖЕР (РЕЖИМ: {args.mode.upper()}) ===")
 
-    ensure_settings(args.mode)
+	if args.mode != 'train':
+		ensure_settings(args.mode)
 
-    while True:
-        # Убиваем старый процесс и запускаем новый, чтобы UE точно подхватил settings.json
-        kill_unreal()
-        start_unreal()
+	# Генерация имени эксперимента для обучения.
+	env_vars = os.environ.copy()
+	if args.mode == 'train':
+		timestamp = datetime.now().strftime('%d_%m_%Y_%H_%M_%S')
+		run_name = f"{config_train.SEG_MODEL_NAME}_{config_train.SEG_BACKBONE}_{timestamp}"
+		env_vars["RUN_NAME"] = run_name
+		print(f"[MANAGER] Текущий эксперимент: {run_name}")
 
-        print(f"[MANAGER] Запуск рабочего скрипта main.py --mode {args.mode}...")
-        
-        process = subprocess.Popen([sys.executable, "main.py", "--mode", args.mode],
-            cwd=BASE_DIR
-        )
-        
-        process.wait()
+	while True:
+		if args.mode in ['collect', 'land']:
+			# Убиваем старый процесс и запускаем новый, чтобы UE точно подхватил settings.json
+			kill_unreal()
+			start_unreal()
 
-        if process.returncode == 0:
-            print(f"[MANAGER] Процесс '{args.mode}' успешно завершен!")
-            kill_unreal()
-            break
-        else:
-            print(f"[MANAGER] Скрипт завершился с ошибкой (код {process.returncode}). Перезапуск через 5 секунд...")
-            time.sleep(5)
+		print(f"[MANAGER] Запуск рабочего скрипта main.py --mode {args.mode}...")
+		
+		process = subprocess.Popen(
+			[sys.executable, "main.py", "--mode", args.mode],
+			cwd=BASE_DIR,
+			env=env_vars
+		)
+		
+		process.wait()
+
+		if process.returncode == 0:
+			print(f"[MANAGER] Процесс '{args.mode}' успешно завершен!")
+			if args.mode in ['collect', 'land']:
+				kill_unreal()
+			break
+		else:
+			print(f"[MANAGER] Скрипт завершился с ошибкой (код {process.returncode}). Перезапуск через 5 секунд...")
+			time.sleep(5)
 
 if __name__ == "__main__":
-    main()
+	main()

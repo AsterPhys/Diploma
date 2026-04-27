@@ -377,3 +377,7 @@ RL_agent/ppo_drone_tensorboard/
 /Landing/data_saved_2
 /Landing/data_saved_3
 /neuro_env
+/Landing/runs/segmentation
+/Landing/data_saved.tar
+/Landing/data_test.tar
+/requirements.txt

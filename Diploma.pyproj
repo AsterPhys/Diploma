@@ -10,7 +10,7 @@
     <OutputPath>.</OutputPath>
     <Name>Diploma</Name>
     <RootNamespace>Diploma</RootNamespace>
-    <InterpreterId>MSBuild|env|$(MSBuildProjectFullPath)</InterpreterId>
+    <InterpreterId>MSBuild|neuro_env|$(MSBuildProjectFullPath)</InterpreterId>
     <TestFramework>Pytest</TestFramework>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
@@ -25,8 +25,11 @@
     <Compile Include="Diploma.py" />
     <Compile Include="Landing\collector.py" />
     <Compile Include="Landing\config.py" />
+    <Compile Include="Landing\config_train.py" />
     <Compile Include="Landing\main.py" />
     <Compile Include="Landing\manager.py" />
+    <Compile Include="Landing\train.py" />
+    <Compile Include="Landing\utils.py" />
     <Compile Include="RL_agent\config.py" />
     <Compile Include="RL_agent\env.py" />
     <Compile Include="RL_agent\manager.py" />
@@ -45,12 +48,22 @@
       <PathEnvironmentVariable>PYTHONPATH</PathEnvironmentVariable>
       <Architecture>X64</Architecture>
     </Interpreter>
+    <Interpreter Include="neuro_env\">
+      <Id>neuro_env</Id>
+      <Version>3.12</Version>
+      <Description>neuro_env (Python 3.12 (64-bit))</Description>
+      <InterpreterPath>Scripts\python.exe</InterpreterPath>
+      <WindowsInterpreterPath>Scripts\pythonw.exe</WindowsInterpreterPath>
+      <PathEnvironmentVariable>PYTHONPATH</PathEnvironmentVariable>
+      <Architecture>X64</Architecture>
+    </Interpreter>
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Landing\" />
     <Folder Include="RL_agent\" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="requirements.txt" />
     <Content Include="RL_agent\raw_routes_config.json" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />

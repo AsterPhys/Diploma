@@ -3,6 +3,7 @@
 # ===============================================
 
 import os
+import numpy as np
 
 # --- ПУТИ ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -13,6 +14,8 @@ DEPTH_DIR = os.path.join(DATA_DIR, 'depth')
 MASK_DIR = os.path.join(DATA_DIR, 'mask')
 DEPTH_VIS_DIR = os.path.join(DATA_DIR, 'depth_vis')
 MASK_VIS_DIR = os.path.join(DATA_DIR, 'mask_vis')
+
+MODELS_DIR = os.path.join(BASE_DIR, 'runs', 'segmentation')
 
 # --- UNREAL ENGINE SETTINGS ---
 UE_EXECUTABLE = r"D:\ProgramFiles\UE_5.4\Engine\Binaries\Win64\UnrealEditor.exe"

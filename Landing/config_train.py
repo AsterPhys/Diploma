@@ -1,4 +1,5 @@
 ﻿import os
+import json
 import numpy as np
 import albumentations as A
 from config import BASE_DIR, IMAGE_WIDTH, IMAGE_HEIGHT
@@ -6,17 +7,19 @@ from config import BASE_DIR, IMAGE_WIDTH, IMAGE_HEIGHT
 MODELS_DIR = os.path.join(BASE_DIR, 'runs', 'segmentation')
 
 # --- СИСТЕМНЫЕ НАСТРОЙКИ ---
-NUM_WORKERS = 0
+NUM_WORKERS = int(os.environ.get("NUM_WORKERS", 0))
 
 # --- ПАРАМЕТРЫ ТЕКУЩЕГО ЭКСПЕРИМЕНТА ---
-SEG_MODEL_NAME = "UNet"    # "UNet", "DeepLabV3", "SegFormer"
-SEG_BACKBONE = "resnet34"  # "resnet34", "mobilenet_v2", "mit_b0"
-SEG_WEIGHTS = "imagenet"
-LEARNING_RATE = 1e-4
-BATCH_SIZE = 4
-EPOCHS = 50
-OPTIMIZER = "Adam"
-CRITERION = "CrossEntropyLoss"
+SEG_MODEL_NAME = os.environ.get("SEG_MODEL_NAME", "Unet")
+SEG_BACKBONE = os.environ.get("SEG_BACKBONE", "resnet34")
+SEG_WEIGHTS = os.environ.get("SEG_WEIGHTS", "imagenet")
+LEARNING_RATE = float(os.environ.get("LEARNING_RATE", 1e-4))
+BATCH_SIZE = int(os.environ.get("BATCH_SIZE", 4))
+EPOCHS = int(os.environ.get("EPOCHS", 50))
+OPTIMIZER = os.environ.get("OPTIMIZER", "Adam")
+CRITERION = os.environ.get("CRITERION", "CrossEntropyLoss")
+
+EXTRA_KWARGS = json.loads(os.environ.get("EXTRA_KWARGS", "{}"))
 
 # --- НАСТРОЙКИ СОХРАНЕНИЯ И ЛОГИРОВАНИЯ ---
 N_SAVE_EXAMPLES = 8
@@ -59,6 +62,7 @@ def get_train_config_dict():
 			"weights": SEG_WEIGHTS,
 			"num_classes": NUM_CLASSES,
 		},
+		"extra_kwargs": EXTRA_KWARGS,
 		"training": {
 			"learning_rate": LEARNING_RATE,
 			"batch_size": BATCH_SIZE,

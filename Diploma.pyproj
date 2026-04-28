@@ -26,6 +26,7 @@
     <Compile Include="Landing\collector.py" />
     <Compile Include="Landing\config.py" />
     <Compile Include="Landing\config_train.py" />
+    <Compile Include="Landing\config_search.py" />
     <Compile Include="Landing\main.py" />
     <Compile Include="Landing\manager.py" />
     <Compile Include="Landing\train.py" />
@@ -63,6 +64,7 @@
     <Folder Include="RL_agent\" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="Landing\README.md" />
     <Content Include="requirements.txt" />
     <Content Include="RL_agent\raw_routes_config.json" />
   </ItemGroup>

@@ -16,10 +16,6 @@ def main():
 		from train import train_model
 		print("[MAIN] Запуск обучения нейросети...")
 		train_model()
-		
-	elif args.mode == 'land':
-		print("[MAIN] Режим посадки пока не реализован.")
-		# TODO: import landing_logic
 
 if __name__ == "__main__":
 	main()

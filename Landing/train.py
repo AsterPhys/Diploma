@@ -49,48 +49,6 @@ def paint_segmap(mask):
 	# Транспонируем для TensorBoard (HWC -> CHW).
 	return np.transpose(rgb, (2, 0, 1))
 
-'''
-def calculate_iou(pred_masks, true_masks, num_classes):
-	"""
-	Считает IoU для каждого батча. 
-	Возвращает словарь {class_id: iou}
-	"""
-	# pred_masks имеют форму [B, C, H, W] (логиты)
-	# Получаем предсказанный класс, за счет чего получаем
-	# размерность [B, H, W]
-	preds = torch.argmax(pred_masks, dim=1)
-
-	ious = {}
-	# IoU для каждого класса
-	for cls in range(num_classes):
-		pred_inds = (preds == cls)
-		target_inds = (true_masks == cls)
-
-		intersection = (pred_inds & target_inds).sum().float()
-		union = (pred_inds | target_inds).sum().float()
-
-		# Если этого класса вообще нет ни в таргете, ни в предсказании,
-		# мы его пропускаем.
-		if union > 0:
-			ious[cls] = (intersection / union).item()
-		else:
-			ious[cls] = float('nan')
-
-	# Бинарный IoU (Safe_Ground vs Все остальные классы - препятствия)
-	pred_danger = (preds > 0)
-	target_danger = (true_masks > 0)
-
-	danger_intersection = (pred_danger & target_danger).sum().float()
-	danger_union = (pred_danger | target_danger).sum().float()
-
-	if danger_union > 0:
-		ious["any_obstacle"] = (danger_intersection / danger_union).item()
-	else:
-		ious["any_obstacle"] = float('nan')
-
-	return ious
-'''
-
 def get_intersection_and_union(pred_masks, true_masks, num_classes):
 	"""
 	Возвращает значения Intersection и Union для каждого класса.
@@ -249,17 +207,22 @@ def train_model():
 	)
 
 	# ======== Инициализация модели ========
-	if config_train.SEG_MODEL_NAME == "UNet":
-		model = smp.Unet(
-			encoder_name=config_train.SEG_BACKBONE,
-			encoder_weights=config_train.SEG_WEIGHTS,
-			in_channels=3,
-			classes=config_train.NUM_CLASSES
-		).to(device)
+	model_class = getattr(smp, config_train.SEG_MODEL_NAME)
+	model = model_class(
+		encoder_name=config_train.SEG_BACKBONE,
+		encoder_weights=config_train.SEG_WEIGHTS,
+		in_channels=3,
+		classes=config_train.NUM_CLASSES,
+		**config_train.EXTRA_KWARGS
+	).to(device)
 
 	if config_train.OPTIMIZER == "Adam":
 		optimizer = torch.optim.Adam(model.parameters(), lr=config_train.LEARNING_RATE)
-	
+	elif config_train.OPTIMIZER == "AdamW":
+		optimizer = torch.optim.AdamW(model.parameters(), lr=config_train.LEARNING_RATE, weight_decay=1e-4)
+	elif config_train.OPTIMIZER == "SGD":
+		optimizer = torch.optim.SGD(model.parameters(), lr=config_train.LEARNING_RATE, momentum=0.9)
+
 	if config_train.CRITERION == "CrossEntropyLoss":
 		criterion = nn.CrossEntropyLoss()
 

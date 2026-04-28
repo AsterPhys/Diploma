@@ -33,13 +33,21 @@ COLOR_MAP = np.array([
 
 # --- АУГМЕНТАЦИИ ---
 TRAIN_TRANSFORMS = A.Compose([
+	A.RandomCrop(height=480, width=640, p=1.0),
+
 	A.HorizontalFlip(p=0.5),
 	A.VerticalFlip(p=0.5),
 	A.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.05, p=0.5),
 	A.GaussianBlur(blur_limit=(3, 5), p=0.2),
+
+	A.Normalize(),
+	A.pytorch.ToTensorV2()
 ])
 
 VAL_TRANSFORMS = A.Compose([
+	A.CenterCrop(height=480, width=640, p=1.0),
+	A.Normalize(),
+	A.pytorch.ToTensorV2()
 ])
 
 def get_train_config_dict():

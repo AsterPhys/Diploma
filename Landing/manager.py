@@ -13,7 +13,6 @@ sys.path.append(ROOT_DIR)
 
 from settings_manager import ensure_settings
 import config
-import config_train
 
 def kill_unreal():
     print("[MANAGER] Убиваем процесс Unreal Engine (если запущен)...")
@@ -40,6 +39,7 @@ def start_unreal():
 def main():
 	parser = argparse.ArgumentParser(description="Автоматический менеджер (Сбор/Обучение/Посадка)")
 	parser.add_argument('--mode', type=str, choices=['collect', 'train', 'land'], required=True)
+	parser.add_argument('--resume_run', type=str, default=None, help="Имя папки эксперимента для продолжения (например: UNet_resnet34_12_05_2024...)")
 	args = parser.parse_args()
 
 	print(f"=== АВТОМАТИЧЕСКИЙ МЕНЕДЖЕР (РЕЖИМ: {args.mode.upper()}) ===")
@@ -50,10 +50,16 @@ def main():
 	# Генерация имени эксперимента для обучения.
 	env_vars = os.environ.copy()
 	if args.mode == 'train':
-		timestamp = datetime.now().strftime('%d_%m_%Y_%H_%M_%S')
-		run_name = f"{config_train.SEG_MODEL_NAME}_{config_train.SEG_BACKBONE}_{timestamp}"
+		import config_train
+
+		if args.resume_run:
+			run_name = args.resume_run
+			print(f"[MANAGER] ПРОДОЛЖЕНИЕ эксперимента: {run_name}")
+		else:
+			timestamp = datetime.now().strftime('%d_%m_%Y_%H_%M_%S')
+			run_name = f"{config_train.SEG_MODEL_NAME}_{config_train.SEG_BACKBONE}_{timestamp}"
+			print(f"[MANAGER] Текущий эксперимент: {run_name}")
 		env_vars["RUN_NAME"] = run_name
-		print(f"[MANAGER] Текущий эксперимент: {run_name}")
 
 	while True:
 		if args.mode in ['collect', 'land']:

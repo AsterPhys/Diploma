@@ -1,9 +1,22 @@
 ﻿import os
+import cv2
+
+# Настройки и фиксы для обучения на AMD
+os.environ['HSA_OVERRIDE_GFX_VERSION'] = '11.0.0'
+# os.environ['HSA_XNACK'] = '0'
+
+os.environ['MIOPEN_FIND_MODE'] = '1'
+os.environ['MIOPEN_DEBUG_DISABLE_FIND_DB'] = '1'
+
+os.environ['MIOPEN_USER_DB_PATH'] = 'D:\\Cache\\Temp'
+os.environ['MIOPEN_CUSTOM_CACHE_DIR'] = 'D:\\Cache\\Temp'
+
 import json
 import torch
-import cv2
 import numpy as np
 from tqdm import tqdm
+import glob
+import re
 
 import torch
 import torchvision
@@ -21,9 +34,12 @@ torch.manual_seed(42)
 if torch.cuda.is_available():
     torch.cuda.manual_seed_all(42)
 
-os.environ['HSA_XNACK'] = '0'
+cv2.setNumThreads(0)
+cv2.ocl.setUseOpenCL(False)
 
-DEBUG = True
+DEBUG = False
+
+# ----------------------------------
 
 def paint_segmap(mask):
 	"""Получает из маски сегментации с классами маску с цветами."""
@@ -33,6 +49,7 @@ def paint_segmap(mask):
 	# Транспонируем для TensorBoard (HWC -> CHW).
 	return np.transpose(rgb, (2, 0, 1))
 
+'''
 def calculate_iou(pred_masks, true_masks, num_classes):
 	"""
 	Считает IoU для каждого батча. 
@@ -72,6 +89,37 @@ def calculate_iou(pred_masks, true_masks, num_classes):
 		ious["any_obstacle"] = float('nan')
 
 	return ious
+'''
+
+def get_intersection_and_union(pred_masks, true_masks, num_classes):
+	"""
+	Возвращает значения Intersection и Union для каждого класса.
+	"""
+	preds = torch.argmax(pred_masks, dim=1)
+	
+	metrics = {}
+	for cls in range(num_classes):
+		pred_inds = (preds == cls)
+		target_inds = (true_masks == cls)
+
+		intersection = (pred_inds & target_inds).sum().item()
+		union = (pred_inds | target_inds).sum().item()
+		
+		metrics[cls] = {"intersection": intersection, "union": union}
+
+	# Бинарный IoU (Safe_Ground vs Все остальные классы - препятствия)
+	pred_danger = (preds > 0)
+	target_danger = (true_masks > 0)
+
+	danger_intersection = (pred_danger & target_danger).sum().item()
+	danger_union = (pred_danger | target_danger).sum().item()
+
+	metrics["any_obstacle"] = {
+		"intersection": danger_intersection, 
+		"union": danger_union
+	}
+
+	return metrics
 
 class DroneLandingDataset(Dataset):
 	def __init__(self, rgb_dir, mask_dir, img_names, transform=None):
@@ -91,6 +139,8 @@ class DroneLandingDataset(Dataset):
 		# Загружаем RGB
 		img_path = os.path.join(self.rgb_dir, img_name)
 		image = cv2.imread(img_path)
+		if image is None:
+			raise ValueError(f"Не удалось прочитать изображение: {img_path}")
 		image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 		
 		# Загружаем маску
@@ -112,15 +162,12 @@ class DroneLandingDataset(Dataset):
 			augmented = self.transform(image=image, mask=new_mask)
 			image = augmented['image']
 			new_mask = augmented['mask']
-
-		# HWC -> CHW + нормализация
-		image = np.transpose(image, (2, 0, 1)).astype(np.float32) / 255.0
-
-		return torch.tensor(image), torch.tensor(new_mask, dtype=torch.long)
+		
+		return image, new_mask.long()
 
 def train_model():
 	device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-	torch.backends.cudnn.benchmark = True
+	# torch.backends.cudnn.benchmark = True
 	print(f"[TRAIN] Используемое устройство для обучения: {device}")
 
 	run_name = os.environ.get("RUN_NAME", "Default_Run")
@@ -216,10 +263,30 @@ def train_model():
 	if config_train.CRITERION == "CrossEntropyLoss":
 		criterion = nn.CrossEntropyLoss()
 
-	# ======== Цикл обучения ========
+	# ======== Восстановление из чекпоинта ========
+	start_epoch = 0
 	best_val_iou = 0.0
 
-	for epoch in range(config_train.EPOCHS):
+	checkpoint_files = glob.glob(os.path.join(run_dir, "model_epoch_*.pth"))
+	if checkpoint_files:
+		print(f"\n[RESUME] Найдено прерванное обучение")
+		def extract_epoch(filepath):
+			match = re.search(r'model_epoch_(\d+)\.pth', os.path.basename(filepath))
+			return int(match.group(1)) if match else -1
+
+		latest_checkpoint = max(checkpoint_files, key=extract_epoch)
+		checkpoint = torch.load(latest_checkpoint, map_location=device)
+
+		print(f"[RESUME] Загружаю веса из: {latest_checkpoint}")
+
+		model.load_state_dict(checkpoint['model_state_dict'])
+		optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+		start_epoch = checkpoint['epoch']
+		print(f"[RESUME] Обучение продолжится с эпохи {start_epoch + 1}\n")
+
+	# ======== Цикл обучения ========
+	scaler = torch.amp.GradScaler('cuda') 
+	for epoch in range(start_epoch, config_train.EPOCHS):
 		model.train()
 		epoch_loss = 0
 
@@ -231,10 +298,13 @@ def train_model():
 				print("DEBUG: Батч перенесен на GPU")
 
 			optimizer.zero_grad()
-			outputs = model(images)
-			loss = criterion(outputs, masks)
-			loss.backward()
-			optimizer.step()
+			with torch.amp.autocast('cuda'):
+				outputs = model(images)
+				loss = criterion(outputs, masks)
+			
+			scaler.scale(loss).backward()
+			scaler.step(optimizer)
+			scaler.update()
 
 			epoch_loss += loss.item()
 			pbar.set_postfix(loss=loss.item())
@@ -246,8 +316,8 @@ def train_model():
 		model.eval()
 		val_loss = 0
 
-		class_ious = {i: [] for i in range(config_train.NUM_CLASSES)}
-		class_ious["any_obstacle"] = []
+		total_intersections = {i: 0 for i in list(range(config_train.NUM_CLASSES)) + ["any_obstacle"]}
+		total_unions = {i: 0 for i in list(range(config_train.NUM_CLASSES)) + ["any_obstacle"]}
 
 		# Сохраняем первый батч для визуализации
 		# P.S.: можно было бы и брать последний батч, на такой вариант
@@ -266,10 +336,10 @@ def train_model():
 				val_loss += loss.item()
 
 				# Метрика IOU
-				batch_ious = calculate_iou(val_outputs, val_masks, config_train.NUM_CLASSES)
-				for cls, iou in batch_ious.items():
-					if not np.isnan(iou):
-						class_ious[cls].append(iou)
+				batch_metrics = get_intersection_and_union(val_outputs, val_masks, config_train.NUM_CLASSES)
+				for key, vals in batch_metrics.items():
+					total_intersections[key] += vals["intersection"]
+					total_unions[key] += vals["union"]
 
 				# Сохраняем первый батч для визуализации
 				if batch_idx == 0:
@@ -279,23 +349,26 @@ def train_model():
 
 			avg_val_loss = val_loss / len(val_loader)
 
-			# Считаем средний IoU для каждого класса
+			# Считаем IoU для каждого класса за эпоху
 			mean_ious = {}
-			for cls in range(config_train.NUM_CLASSES):
-				if len(class_ious[cls]) > 0:
-					mean_ious[cls] = np.mean(class_ious[cls])
+			for key in list(range(config_train.NUM_CLASSES)) + ["any_obstacle"]:
+				if total_unions[key] > 0:
+					mean_ious[key] = total_intersections[key] / total_unions[key]
 				else:
-					mean_ious[cls] = 0.0
-				
+					mean_ious[key] = 0.0 # Если класса не было в валидации
+
 			# Общий mIoU
-			# считаем только по базовым 4 классам
-			mIoU = np.mean([mean_ious[i] for i in range(config_train.NUM_CLASSES)])
-			
+			# считаем только по базовым классам
+			valid_class_ious = [mean_ious[i] for i in range(config_train.NUM_CLASSES) if total_unions[i] > 0]
+			mIoU = np.mean(valid_class_ious) if valid_class_ious else 0.0
+
 			writer.add_scalar("Loss/Validation", avg_val_loss, epoch)
 			writer.add_scalar("Metrics/mIoU_All_Classes", mIoU, epoch)
 			# Отдельно сохраняем IoU для Safe_Ground
 			writer.add_scalar("Metrics/IoU_Safe_Ground", mean_ious[0], epoch)
-			writer.add_scalar("Metrics/IoU_Obstacles", mean_ious[1], epoch)
+			writer.add_scalar("Metrics/IoU_Static_Obstacle", mean_ious[1], epoch)
+			writer.add_scalar("Metrics/IoU_Vegetation", mean_ious[2], epoch)
+			writer.add_scalar("Metrics/IoU_Dynamic_Obstacle", mean_ious[3], epoch)
 			writer.add_scalar("Metrics/IoU_Any_Obstacle", mean_ious["any_obstacle"], epoch)
 
 			writer.add_image("Visual/1_Image", visual_images[0], epoch)
@@ -304,15 +377,25 @@ def train_model():
 
 			# Сохраняем модель каждую эпоху
 			epoch_model_name = f"model_epoch_{epoch+1}.pth"
-			torch.save(model.state_dict(), os.path.join(run_dir, epoch_model_name))
+			torch.save({
+				'epoch': epoch + 1,
+				'model_state_dict': model.state_dict(),
+				'optimizer_state_dict': optimizer.state_dict(),
+				'best_val_iou': best_val_iou,
+			}, os.path.join(run_dir, epoch_model_name))
 
 			# Сохраняем лучшую модель
 			if mean_ious[0] > best_val_iou:
 				best_val_iou = mean_ious[0]
-				torch.save(model.state_dict(), os.path.join(run_dir, "best_model.pth"))
+				torch.save({
+					'epoch': epoch + 1,
+					'model_state_dict': model.state_dict(),
+					'optimizer_state_dict': optimizer.state_dict(),
+					'best_val_iou': best_val_iou,
+				}, os.path.join(run_dir, "best_model.pth"))
 				print(f"\n[SAVE] Обновлена лучшая модель на эпохе {epoch+1}")
 
-		print(f"Epoch [{epoch+1}/{config_train.EPOCHS}] | Train Loss: {avg_loss:.4f} | Val Loss: {avg_val_loss:.4f} | mIoU: {mIoU:.4f} | SafeGround_IoU: {mean_ious[0]:.4f} | Any_Obstacle_IoU: {np.mean(class_ious['any_obstacle']):.4f}")
+		print(f"Epoch[{epoch+1}/{config_train.EPOCHS}] | Train Loss: {avg_loss:.4f} | Val Loss: {avg_val_loss:.4f} | mIoU: {mIoU:.4f} | SafeGround_IoU: {mean_ious[0]:.4f} | Any_Obstacle_IoU: {mean_ious['any_obstacle']:.4f}")
 
 	writer.close()
 

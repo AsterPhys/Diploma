@@ -171,15 +171,19 @@ class ColosseumDroneEnv(gym.Env):
 	def reset(self, seed=None, options=None):
 		super().reset(seed=seed)
         
-		# Смена уровня по необходимости
-		if self.pending_level_change is not None:
-			self.current_level = self.pending_level_change
-			self.pending_level_change = None
+		if options is not None:
+			if "level" in options:
+				self.current_level = options["level"]
+			if "route" in options:
+				self.current_route_idx = options["route"]
+		else:
+			# Смена уровня по необходимости
+			if self.pending_level_change is not None:
+				self.current_level = self.pending_level_change
+				self.pending_level_change = None
 
-		level_key = f"level_{self.current_level}"
-		routes_in_current_level = len(self.routes_data[level_key])
-		# Выбираем случайный маршрут из разблокированных
-		self.current_route_idx = random.randint(0, self.unlocked_routes_count - 1)
+			# Выбираем случайный маршрут из разблокированных
+			self.current_route_idx = random.randint(0, self.unlocked_routes_count - 1)
 
         # Сбрасываем симулятор и дрона
 		self.client.simPause(False)
@@ -192,7 +196,6 @@ class ColosseumDroneEnv(gym.Env):
 		# Устанавливаем маршрут
 		self.start_position, self.start_pose, self.target_position = self._generate_new_route()
 		
-		self.client.simPause(False)
 		self.client.simSetVehiclePose(self.start_pose, True)
 
 		self.client.moveByVelocityAsync(0.0, 0.0, 0.0, duration=0.2)

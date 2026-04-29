@@ -10,7 +10,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # Если указать существующую папку (например "PPO_run_12_10_2023_14_00"), скрипт продолжит обучение
 EXPERIMENT_NAME = None
 
-LOAD_FROM_RUN_NAME = "PPO_drone_24_04_2026_08_58_57"
+LOAD_FROM_RUN_NAME = "PPO_drone_29_04_2026_08_17_19"
 DEBUG = False
 
 # --- ПУТИ ---

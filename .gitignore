@@ -381,3 +381,4 @@ RL_agent/ppo_drone_tensorboard/
 /Landing/data_saved.tar
 /Landing/data_test.tar
 /requirements.txt
+/Landing/data.tar

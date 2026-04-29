@@ -17,8 +17,7 @@ def main():
 	parser = argparse.ArgumentParser(description="Тестирование обученного агента")
 	parser.add_argument("--model", type=str, required=True, help="Путь к .zip файлу модели (например, models/run_1/latest_model.zip)")
 	parser.add_argument("--level", type=int, default=0, help="Индекс уровня (0 - BaseLevel, 1 - CityLevel и т.д.)")
-	parser.add_argument("--route", type=int, default=0, help="Индекс маршрута на выбранном уровне")
-	parser.add_argument("--episodes", type=int, default=3, help="Сколько раз пролететь этот маршрут")
+	parser.add_argument("--routes", type=int, nargs='+', default=[0], help="Список маршрутов через пробел (например: --routes 0 2 5)")
 	parser.add_argument("--fps", type=int, default=60, help="Задержка (в кадрах в секунду) для удобного просмотра")
 	
 	args = parser.parse_args()
@@ -41,17 +40,18 @@ def main():
 	print("=== Инициализация среды ===")
 	env = ColosseumDroneEnv()
 
-	for ep in range(args.episodes):
-		env.pending_level_change = args.level
-		env.current_route_idx = args.route
+	for ep, route_idx in enumerate(args.routes):
+		print(f"\n--- Эпизод {ep+1}/{len(args.routes)} | Уровень: {args.level} | Маршрут: {route_idx} ---")
+		
+		obs, info = env.reset(options={
+			"level": args.level, 
+			"route": route_idx
+		})
 
-		obs, info = env.reset()
 		done = False
 		total_reward = 0.0
 		steps = 0
 
-		print(f"\n--- Эпизод {ep+1}/{args.episodes} | Уровень: {args.level} | Маршрут: {args.route} ---")
-		
 		while not done:
 			# deterministic=True заставляет агента выбирать лучшее действие без режима исследования (exploration)
 			action, _states = model.predict(obs, deterministic=True)
@@ -65,11 +65,11 @@ def main():
 			time.sleep(1.0 / args.fps)
 			
 		if info.get("is_success"):
-			print(f"✅ РЕЗУЛЬТАТ: УСПЕХ! Дрон достиг цели.")
+			print(f"РЕЗУЛЬТАТ: УСПЕХ! Дрон достиг цели.")
 		else:
-			print(f"❌ РЕЗУЛЬТАТ: КРАШ / ТАЙМАУТ.")
+			print(f"РЕЗУЛЬТАТ: КРАШ / ТАЙМАУТ.")
 			
-		print(f"📊 Награда: {total_reward:.2f} | Шагов выжито: {steps}")
+		print(f"Награда: {total_reward:.2f} | Шагов выжито: {steps}")
 
 	env.close()
 	print("\nТестирование завершено.")

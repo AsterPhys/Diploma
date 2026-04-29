@@ -10,7 +10,7 @@
     <OutputPath>.</OutputPath>
     <Name>Diploma</Name>
     <RootNamespace>Diploma</RootNamespace>
-    <InterpreterId>MSBuild|neuro_env|$(MSBuildProjectFullPath)</InterpreterId>
+    <InterpreterId>MSBuild|env|$(MSBuildProjectFullPath)</InterpreterId>
     <TestFramework>Pytest</TestFramework>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">

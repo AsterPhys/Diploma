@@ -31,6 +31,13 @@
     <Compile Include="Landing\manager.py" />
     <Compile Include="Landing\train.py" />
     <Compile Include="Landing\utils.py" />
+    <Compile Include="Pipeline\config_pipeline.py" />
+    <Compile Include="Pipeline\modules\control.py" />
+    <Compile Include="Pipeline\modules\geometry.py" />
+    <Compile Include="Pipeline\modules\rl_wrapper.py" />
+    <Compile Include="Pipeline\modules\vision.py" />
+    <Compile Include="Pipeline\state_machine.py" />
+    <Compile Include="Pipeline\modules\vision_server.py" />
     <Compile Include="RL_agent\config.py" />
     <Compile Include="RL_agent\env.py" />
     <Compile Include="RL_agent\manager.py" />
@@ -61,10 +68,13 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Landing\" />
+    <Folder Include="Pipeline\" />
+    <Folder Include="Pipeline\modules\" />
     <Folder Include="RL_agent\" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Landing\README.md" />
+    <Content Include="Pipeline\.env" />
     <Content Include="requirements.txt" />
     <Content Include="RL_agent\raw_routes_config.json" />
   </ItemGroup>

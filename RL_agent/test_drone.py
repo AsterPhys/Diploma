@@ -12,7 +12,7 @@ from env import ColosseumDroneEnv
 from train import DroneMultimodalExtractor
 from settings_manager import ensure_settings
 
-# python test_drone.py --model models/PPO_drone_23_04_2026_09_55_59/latest_model.zip --level 0 --route 2 --episodes 3
+# python test_drone.py --model models/PPO_drone_30_04_2026_09_56_09/latest_model.zip --level 0 --routes 0 1 2 3
 def main():
 	parser = argparse.ArgumentParser(description="Тестирование обученного агента")
 	parser.add_argument("--model", type=str, required=True, help="Путь к .zip файлу модели (например, models/run_1/latest_model.zip)")

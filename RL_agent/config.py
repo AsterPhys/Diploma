@@ -10,7 +10,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # Если указать существующую папку (например "PPO_run_12_10_2023_14_00"), скрипт продолжит обучение
 EXPERIMENT_NAME = None
 
-LOAD_FROM_RUN_NAME = "PPO_drone_29_04_2026_08_17_19"
+LOAD_FROM_RUN_NAME = "PPO_drone_30_04_2026_00_04_38"
 DEBUG = False
 
 # --- ПУТИ ---
@@ -50,7 +50,7 @@ NN_VF_ARCH = [128, 128] # Слои для Critic
 # Как часто (в шагах) проверяем возможность смены уровня
 CL_CHECK_FREQ = 1024
 # CL_CHECK_FREQ = 50
-CL_SUCCESS_THRESHOLD = 0.8
+CL_SUCCESS_THRESHOLD = 0.3
 CL_WINDOW_SIZE_PER_ROUTE = 20
 # CL_WINDOW_SIZE_PER_ROUTE = 5
 CL_MAX_STEPS_PER_LEVEL = 1_048_576 * 3

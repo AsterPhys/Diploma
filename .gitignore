@@ -383,3 +383,4 @@ RL_agent/ppo_drone_tensorboard/
 /requirements.txt
 /Landing/data.tar
 /Pipeline/.env
+/RL_agent/rl_tensorboard

@@ -1,7 +1,7 @@
 ﻿import gymnasium as gym
 import torch
 import torch.nn as nn
-from stable_baselines3 import PPO
+from stable_baselines3 import PPO, SAC
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.monitor import Monitor
@@ -164,7 +164,7 @@ class CurriculumCallback(BaseCallback):
 			self.route_buffers[route_idx].append(1.0 if is_success else 0.0)
 
 		# Периодическое сохранение прогресса
-		if self.num_timesteps % (config.PPO_N_STEPS * 2) == 0:
+		if self.num_timesteps % config.SAVE_FREQ_STEPS == 0:
 			self.save_state()
 
 		# == Проверка уровня ==
@@ -267,7 +267,7 @@ def main():
 		if config.EXPERIMENT_NAME:
 			run_name = config.EXPERIMENT_NAME
 		else:
-			run_name = f"PPO_drone_{datetime.now().strftime('%d_%m_%Y_%H_%M_%S')}"
+			run_name = f"{config.ALGORITHM}_drone_{datetime.now().strftime('%d_%m_%Y_%H_%M_%S')}"
 
 	run_dir = os.path.join(config.MODELS_DIR, run_name)
 	os.makedirs(run_dir, exist_ok=True)
@@ -323,39 +323,66 @@ def main():
 	env = Monitor(env)
 	env = DummyVecEnv([lambda: env])
 
+	if config.ALGORITHM == "PPO":
+		net_arch = dict(pi=config.NN_PI_ARCH, vf=config.NN_VF_ARCH)
+	elif config.ALGORITHM == "SAC":
+		net_arch = dict(pi=config.NN_PI_ARCH, qf=config.NN_VF_ARCH)
+
 	# Настройки архитектуры нейросети
 	policy_kwargs = dict(
 		features_extractor_class=DroneMultimodalExtractor,
 		features_extractor_kwargs=dict(features_dim=config.DEPTH_MAP_OUT_SIZE + config.VECTOR_OUT_SIZE),
 		# Слои для Actor (pi) и Critic (vf) после извлечения фичей.
 		# 2 полносвязных слоя размером 128 для каждого.
-		net_arch=dict(pi=config.NN_PI_ARCH, vf=config.NN_VF_ARCH) 
+		net_arch=net_arch
 	)
 
 	curriculum_callback = CurriculumCallback(run_dir=run_dir)
+	AlgoClass = PPO if config.ALGORITHM == "PPO" else SAC
 
 	if load_path:
-		model = PPO.load(load_path, env=env, tensorboard_log=config.TENSORBOARD_LOG)
+		model = AlgoClass.load(load_path, env=env, tensorboard_log=config.TENSORBOARD_LOG)
 		if loaded_state_data:
 			curriculum_callback.load_state(loaded_state_data)
 	else:
-		model = PPO(
-			"MultiInputPolicy", 
-			env,
-			policy_kwargs=policy_kwargs,
-			verbose=1,
+		if config.ALGORITHM == "PPO":
+			model = PPO(
+				"MultiInputPolicy", 
+				env,
+				policy_kwargs=policy_kwargs,
+				verbose=1,
 
-			learning_rate=config.PPO_LEARNING_RATE,
-			# сколько шагов собрать перед обновлением весов
-			n_steps=config.PPO_N_STEPS,
-			batch_size=config.PPO_BATCH_SIZE,
-			n_epochs=config.PPO_N_EPOCHS,
-			# параметр дисконтирования (насколько важны будущие награды)
-			gamma=config.PPO_GAMMA,
+				learning_rate=config.PPO_LEARNING_RATE,
+				# сколько шагов собрать перед обновлением весов
+				n_steps=config.PPO_N_STEPS,
+				batch_size=config.PPO_BATCH_SIZE,
+				n_epochs=config.PPO_N_EPOCHS,
+				# параметр дисконтирования (насколько важны будущие награды)
+				gamma=config.PPO_GAMMA,
 
-			max_grad_norm=0.5,
-			ent_coef=config.ENT_COEF,
-		)
+				max_grad_norm=0.5,
+				ent_coef=config.PPO_ENT_COEF,
+			)
+		elif config.ALGORITHM == "SAC":
+			model = SAC(
+				"MultiInputPolicy", 
+				env,
+				policy_kwargs=policy_kwargs,
+				verbose=1,
+
+				learning_rate=config.SAC_LEARNING_RATE,
+				buffer_size=config.SAC_BUFFER_SIZE,
+				learning_starts=config.SAC_LEARNING_STARTS,
+
+				batch_size=config.SAC_BATCH_SIZE,
+				train_freq=config.SAC_TRAIN_FREQ,
+				gradient_steps=config.SAC_GRADIENT_STEPS,
+
+				gamma=config.SAC_GAMMA,
+
+				tau=config.SAC_TAU,
+				ent_coef=config.SAC_ENT_COEF,
+			)
 
 	tb_log_dir = os.path.join(config.TENSORBOARD_LOG, run_name)
 	new_logger = configure(tb_log_dir, ["stdout", "tensorboard"])

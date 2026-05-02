@@ -70,7 +70,7 @@ def main():
 	if config.EXPERIMENT_NAME:
 		run_name = config.EXPERIMENT_NAME
 	else:
-		run_name = f"PPO_drone_{datetime.now().strftime('%d_%m_%Y_%H_%M_%S')}"
+		run_name = f"{config.ALGORITHM}_drone_{datetime.now().strftime('%d_%m_%Y_%H_%M_%S')}"
 	print(f"[MANAGER] Текущий эксперимент: {run_name}")
 
 	env_vars = os.environ.copy()

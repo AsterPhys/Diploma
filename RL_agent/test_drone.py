@@ -1,7 +1,7 @@
 ﻿import os
 import argparse
 import time
-from stable_baselines3 import PPO
+from stable_baselines3 import PPO, SAC
 import sys
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -12,13 +12,15 @@ from env import ColosseumDroneEnv
 from train import DroneMultimodalExtractor
 from settings_manager import ensure_settings
 
-# python test_drone.py --model models/PPO_drone_30_04_2026_09_56_09/latest_model.zip --level 0 --routes 0 1 2 3
+# python test_drone.py --model models/PPO_drone_01_05_2026_00_27_21/latest_model.zip --level 0 --routes 0 1 2 3
 def main():
 	parser = argparse.ArgumentParser(description="Тестирование обученного агента")
 	parser.add_argument("--model", type=str, required=True, help="Путь к .zip файлу модели (например, models/run_1/latest_model.zip)")
+	parser.add_argument("--algo", type=str, default="PPO", choices=["PPO", "SAC"], help="Каким алгоритмом обучалась модель")
 	parser.add_argument("--level", type=int, default=0, help="Индекс уровня (0 - BaseLevel, 1 - CityLevel и т.д.)")
 	parser.add_argument("--routes", type=int, nargs='+', default=[0], help="Список маршрутов через пробел (например: --routes 0 2 5)")
 	parser.add_argument("--fps", type=int, default=60, help="Задержка (в кадрах в секунду) для удобного просмотра")
+	parser.add_argument("--deterministic", type=bool, default=True, help="Детерминирована ли модель.")
 	
 	args = parser.parse_args()
 
@@ -34,8 +36,9 @@ def main():
 	if not os.path.exists(args.model):
 		raise FileNotFoundError(f"Модель не найдена по пути: {args.model}")
 
-	print(f"=== Загрузка модели из {args.model} ===")
-	model = PPO.load(args.model)
+	AlgoClass = PPO if args.algo == "PPO" else SAC
+	print(f"=== Загрузка {args.algo} модели из {args.model} ===")
+	model = AlgoClass.load(args.model)
 
 	print("=== Инициализация среды ===")
 	env = ColosseumDroneEnv()
@@ -54,7 +57,7 @@ def main():
 
 		while not done:
 			# deterministic=True заставляет агента выбирать лучшее действие без режима исследования (exploration)
-			action, _states = model.predict(obs, deterministic=True)
+			action, _states = model.predict(obs, deterministic=args.deterministic)
 			
 			obs, reward, terminated, truncated, info = env.step(action)
 			total_reward += reward

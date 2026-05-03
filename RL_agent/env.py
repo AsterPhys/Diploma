@@ -13,7 +13,7 @@ from collections import deque
 from config import (
     ROUTES_CONFIG_PATH, MAX_SPEED, MOVE_TIME, 
     ARRIVAL_DIST, CLOSE2TARGET_REWARD_COEFF, DISTANCE_CLIP_THR,
-	DEBUG
+	DEBUG, POS_NOISE_STD, DEPTH_NOISE_STD, DROPOUT_PROB
 )
 
 class ColosseumDroneEnv(gym.Env):
@@ -117,6 +117,18 @@ class ColosseumDroneEnv(gym.Env):
 		])[0]
 		data_img = airsim.list_to_2d_float_array(response.image_data_float, \
 												 response.width, response.height)
+		
+		# --> Добавляем шумы на карту глубины
+		# Гауссовский шум (погрешность измерения дальности)
+		depth_noise = np.random.normal(0, DEPTH_NOISE_STD, data_img.shape)
+		data_img += depth_noise
+
+		# Dropouts (имитация слепых зон сенсора)
+		# Создаем маску битых пикселей
+		dropout_mask = np.random.rand(*data_img.shape) < DROPOUT_PROB
+		# Битые пиксели обычно улетают в максимальную дальность
+		data_img[dropout_mask] = DISTANCE_CLIP_THR 
+
 		data_depth_map = np.clip(data_img / DISTANCE_CLIP_THR, 0.0, 1.0)
 		data_depth_map = np.expand_dims(data_depth_map, axis=0).astype(np.float32)
 
@@ -126,6 +138,12 @@ class ColosseumDroneEnv(gym.Env):
 		orientation = state_estimated.orientation
 		
 		drone_position = np.array([position.x_val, position.y_val, position.z_val])
+		
+		# --> Добавляем шум на координаты
+		# Имитируем погрешность GPS
+		pos_noise = np.random.normal(0, POS_NOISE_STD, size=3)
+		drone_position += pos_noise
+		
 		drone_orientation = [orientation.x_val, orientation.y_val, \
 							 orientation.z_val, orientation.w_val]
 		

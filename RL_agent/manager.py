@@ -63,9 +63,6 @@ def main():
 	ensure_settings("rl_train")
 	if not os.path.exists(config.ROUTES_CONFIG_PATH):
 		generate_config(start_unreal, kill_unreal)
-	
-	if not os.path.exists(config.ROUTES_CONFIG_PATH):
-		generate_config(start_unreal, kill_unreal)
 
 	if config.EXPERIMENT_NAME:
 		run_name = config.EXPERIMENT_NAME

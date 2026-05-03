@@ -113,16 +113,14 @@ class ColosseumDroneEnv(gym.Env):
 	def _get_obs(self):
 		# -- 1. Получаем карту глубины --
 		response = self.client.simGetImages([
-			airsim.ImageRequest("0", airsim.ImageType.DepthPlanar, True, False)
+			airsim.ImageRequest("front_center", airsim.ImageType.DepthPlanar, True, False)
 		])[0]
-		# !!! не забыть настроить камеру, чтобы она возвращала изображение 84x84
 		data_img = airsim.list_to_2d_float_array(response.image_data_float, \
 												 response.width, response.height)
 		data_depth_map = np.clip(data_img / DISTANCE_CLIP_THR, 0.0, 1.0)
 		data_depth_map = np.expand_dims(data_depth_map, axis=0).astype(np.float32)
 
 		# -- 2. Получаем положение дрона --
-		# !!! не забыть настроить шумы
 		state_estimated = self.client.getMultirotorState().kinematics_estimated
 		position = state_estimated.position
 		orientation = state_estimated.orientation
@@ -149,17 +147,22 @@ class ColosseumDroneEnv(gym.Env):
 		start_coords = route["start_local"]
 		start_position = np.array([start_coords[0], start_coords[1], start_coords[2]])
 
-		random_yaw = random.uniform(math.radians(-15), math.radians(15))
-		start_vector = airsim.Vector3r(float(start_position[0]), float(start_position[1]), float(start_position[2]))
-		start_orientation = airsim.to_quaternion(0, 0, random_yaw)
-		start_pose = airsim.Pose(start_vector, start_orientation)
-
 		target_gps = route["target_gps"]
 		target_ned = pm.geodetic2ned(
 			target_gps[0], target_gps[1], target_gps[2],
 			self.lat_start, self.lon_start, self.alt_start
 		)
 		target_position = np.array(target_ned)
+
+		delta_x = target_position[0] - start_position[0]
+		delta_y = target_position[1] - start_position[1]
+		angle_to_target = math.atan2(delta_y, delta_x)
+
+		random_yaw = angle_to_target + random.uniform(math.radians(-30), math.radians(30))
+		
+		start_vector = airsim.Vector3r(float(start_position[0]), float(start_position[1]), float(start_position[2]))
+		start_orientation = airsim.to_quaternion(0, 0, random_yaw)
+		start_pose = airsim.Pose(start_vector, start_orientation)
 		
 		# 3. Рассчитываем дистанцию
 		self.MAX_DISTANCE = np.linalg.norm(target_position - start_position)
@@ -205,7 +208,7 @@ class ColosseumDroneEnv(gym.Env):
 		# Прогрев камеры
 		for _ in range(3):
 			self.client.simGetImages([
-				airsim.ImageRequest("0", airsim.ImageType.DepthPlanar, True, False)
+				airsim.ImageRequest("front_center", airsim.ImageType.DepthPlanar, True, False)
 			])
 			time.sleep(0.05)
 
@@ -307,13 +310,12 @@ class ColosseumDroneEnv(gym.Env):
 		'''
 		Вызывается извне, когда пора сменить локацию.
 		'''
-		if new_level <= self.max_level:
-			print(f"\n=============================================")
-			print(f">>> АГЕНТ ПОВЫШЕН! ПЕРЕХОД НА ЛОКАЦИЮ: level_{new_level} <<<")
-			print(f"=============================================\n")
-			self.pending_level_change = new_level
-			self.current_route_idx = 0 # сбрасываем маршрут
-			self.unlocked_routes_count = 1 # сбрасываем пул маршрутов
+		print(f"\n=============================================")
+		print(f">>> АГЕНТ ПОВЫШЕН! ПЕРЕХОД НА ЛОКАЦИЮ: level_{new_level} <<<")
+		print(f"=============================================\n")
+		self.pending_level_change = new_level
+		self.current_route_idx = 0 # сбрасываем маршрут
+		self.unlocked_routes_count = 1 # сбрасываем пул маршрутов
 
 	def close(self):
 		try:

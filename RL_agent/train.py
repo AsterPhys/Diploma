@@ -90,7 +90,7 @@ class DroneMultimodalExtractor(BaseFeaturesExtractor):
 class CurriculumCallback(BaseCallback):
 	def __init__(self, run_dir, check_freq=config.CL_CHECK_FREQ, success_threshold=config.CL_SUCCESS_THRESHOLD,
 				 window_size_per_route=config.CL_WINDOW_SIZE_PER_ROUTE, max_steps_per_level=config.CL_MAX_STEPS_PER_LEVEL,
-				 verbose=1):
+				 max_steps_per_route_unlock=config.CL_MAX_STEPS_PER_ROUTE_UNLOCK, verbose=1):
 		'''
 		:check_freq: с какой частотой алгоритм будет проверять, нужно ли переходить на следующий уровень или нет;
 		:success_threshold: процент успешных полетов для каждого маршута, после которого происходит
@@ -104,13 +104,15 @@ class CurriculumCallback(BaseCallback):
 		self.success_threshold = success_threshold
 		self.window_size_per_route = window_size_per_route
 		self.max_steps_per_level = max_steps_per_level
-
+		self.max_steps_per_route_unlock = max_steps_per_route_unlock
+		
 		# Храним информацию для каждого маршрута об удачных попытках.
 		self.route_buffers = {}
 
 		self.steps_in_current_level = 0
+		self.steps_since_last_unlock = 0
 
-	def save_state(self):
+	def save_state(self, save_buffer=False):
 		env = self.training_env.envs[0].unwrapped
 		
 		# Если запланирован переход на новый уровень, сохраняем его.
@@ -122,6 +124,7 @@ class CurriculumCallback(BaseCallback):
 			"current_route_idx": env.current_route_idx,
 			"unlocked_routes_count": getattr(env, "unlocked_routes_count", 1),
 			"steps_in_current_level": self.steps_in_current_level,
+			"steps_since_last_unlock": self.steps_since_last_unlock,
 			"total_timesteps": self.num_timesteps,
 			"route_buffers": {k: list(v) for k, v in self.route_buffers.items()} 
 		}
@@ -132,8 +135,13 @@ class CurriculumCallback(BaseCallback):
 		# На всякий случай сохраняем саму модель
 		self.model.save(os.path.join(self.run_dir, "latest_model.zip"))
 
+		if save_buffer and config.ALGORITHM == "SAC":
+			print("\n[INFO] Сохранение Replay Buffer (несколько ГБ), подождите...")
+			self.model.save_replay_buffer(os.path.join(self.run_dir, "replay_buffer.pkl"))
+
 	def load_state(self, state_data):
 		self.steps_in_current_level = state_data.get("steps_in_current_level", 0)
+		self.steps_since_last_unlock = state_data.get("steps_since_last_unlock", 0)
 		self.total_timesteps_passed = state_data.get("total_timesteps", 0)
 
 		buffers = state_data.get("route_buffers", {})
@@ -147,6 +155,7 @@ class CurriculumCallback(BaseCallback):
 		LAST_STEP_TIME = time.time()
 
 		self.steps_in_current_level += 1
+		self.steps_since_last_unlock += 1
 
 		# Проверяем, закончился ли эпизод.
 		# P.S.: у нас одна среда, поэтому индекс 0.
@@ -167,7 +176,7 @@ class CurriculumCallback(BaseCallback):
 		if self.num_timesteps % config.SAVE_FREQ_STEPS == 0:
 			self.save_state()
 
-		# == Проверка уровня ==
+		# == Проверка уровня и маршрутов ==
 		if self.n_calls % self.check_freq == 0:
 			env = self.training_env.envs[0].unwrapped
 			current_lvl = env.current_level
@@ -175,38 +184,33 @@ class CurriculumCallback(BaseCallback):
 
 			total_routes_in_level = len(env.routes_data[f"level_{current_lvl}"])
 
-			# Дальнейшая логика по переходу на другой уровень только
-			# если текущий не максимальный
-			if current_lvl < max_lvl:
-				force_upgrade = False
-				all_routes_passed = False
-				unlocked = getattr(env, "unlocked_routes_count", 1)
+			force_upgrade_level = False
+			all_routes_passed = False
+			force_unlock_route = False
+			unlocked = getattr(env, "unlocked_routes_count", 1)
 
-				# --> Проверка на таймаут
-				if self.steps_in_current_level >= self.max_steps_per_level:
-					force_upgrade = True
-				else:
-					# Проверяем винрейт на открытых маршрутах. Когда он
-					# он осваивает всек маршруты, перходит на новый уровень.
-					if len(self.route_buffers) >= unlocked:
-						passed_count = 0
-						for r_idx in range(unlocked):
-							buf = self.route_buffers.get(r_idx,[])
-							if len(buf) == self.window_size_per_route and np.mean(buf) >= self.success_threshold:
-								passed_count += 1
+			if self.steps_in_current_level >= self.max_steps_per_level:
+				force_upgrade_level = True
+			else:
+				# Считаем успешно пройденные маршруты
+				passed_count = 0
+				if len(self.route_buffers) >= unlocked:
+					for r_idx in range(unlocked):
+						buf = self.route_buffers.get(r_idx,[])
+						if len(buf) == self.window_size_per_route and np.mean(buf) >= self.success_threshold:
+							passed_count += 1
+							
+				# Открытие маршрута по винрейту
+				if passed_count == unlocked:
+					if unlocked < total_routes_in_level:
+						force_unlock_route = "УСПЕХ (Отличный winrate)"
+					else:
+						all_routes_passed = True
 
-						if passed_count == unlocked:
-							# Дрон освоил все открытые маршруты!
-							if unlocked < total_routes_in_level:
-								# Открываем следующий маршрут
-								env.unlocked_routes_count += 1
-								print(f"\n>>> ОТКРЫТ НОВЫЙ МАРШРУТ: #{env.unlocked_routes_count - 1} <<<")
-								# Очищаем буфер, чтобы дрон заново доказал, что умеет летать все открытые
-								self.route_buffers.clear()
-								self.save_state()
-							else:
-								# Если открыты и пройдены ВСЕ маршруты на карте - меняем город!
-								all_routes_passed = True
+				# Принудительное открытие по таймауту
+				elif self.steps_since_last_unlock >= self.max_steps_per_route_unlock:
+					if unlocked < total_routes_in_level:
+						force_unlock_route = "ТАЙМАУТ (Слишком долго на маршруте)"
 
 				# Вывод статистики в консоль
 				if self.verbose > 0:
@@ -217,23 +221,33 @@ class CurriculumCallback(BaseCallback):
 						stats_str.append(f"Маршрут {r_idx}: {rate:.0f}% ({len(buf)}/{self.window_size_per_route})")
 
 					print(f"[{self.n_calls}] Level {current_lvl} | " + " | ".join(stats_str))
+					print(f"Шагов до разблокировки: {self.steps_since_last_unlock}/{self.max_steps_per_route_unlock}")
 					print(f"Шагов на уровне: {self.steps_in_current_level}/{self.max_steps_per_level}")
 
+				if force_unlock_route:
+					env.unlocked_routes_count += 1
+					print(f"\n>>> ОТКРЫТ МАРШРУТ #{env.unlocked_routes_count - 1} | Причина: {force_unlock_route} <<<")
+					self.route_buffers.clear()
+					self.steps_since_last_unlock = 0
+					self.save_state(save_buffer=False)
+
 				# Переход на следующий уровень
-				if all_routes_passed or force_upgrade:
-					reason = "ТАЙМАУТ" if force_upgrade else "УСПЕХ (Все маршруты освоены)"
-					new_lvl = current_lvl + 1
+				if all_routes_passed or force_upgrade_level:
+					reason = "ТАЙМАУТ УРОВНЯ" if force_upgrade_level else "УСПЕХ (Все маршруты уровня освоены)"
+				
+					new_lvl = (current_lvl + 1) % (max_lvl + 1)
 
 					print(f"\n=============================================")
 					print(f"!!! {reason} !!!")
-					print(f"Переход на уровень сложности: {new_lvl}")
+					print(f"Переход на уровень: level_{new_lvl}")
 					print(f"=============================================\n")
 
 					env.set_level(new_lvl)
 					self.steps_in_current_level = 0
+					self.steps_since_last_unlock = 0
 					self.route_buffers.clear()
 
-					self.save_state()
+					self.save_state(save_buffer=True)
 					sys.exit(42)
 		
 		return True
@@ -342,6 +356,13 @@ def main():
 
 	if load_path:
 		model = AlgoClass.load(load_path, env=env, tensorboard_log=config.TENSORBOARD_LOG)
+		
+		# Загрузка буфера для SAC
+		buffer_path = os.path.join(os.path.dirname(load_path), "replay_buffer.pkl")
+		if config.ALGORITHM == "SAC" and os.path.exists(buffer_path):
+			print("=== Загрузка Replay Buffer (может занять время) ===")
+			model.load_replay_buffer(buffer_path)
+
 		if loaded_state_data:
 			curriculum_callback.load_state(loaded_state_data)
 	else:
@@ -402,7 +423,7 @@ def main():
 		print(f"Обучение было прервано. Сохраняем модель...\n{e}")
 		sys.exit(1)
 	finally:
-		curriculum_callback.save_state()
+		curriculum_callback.save_state(save_buffer=True)
 		env.close()
 
 

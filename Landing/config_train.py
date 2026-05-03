@@ -35,17 +35,51 @@ COLOR_MAP = np.array([
 ], dtype=np.uint8)
 
 # --- АУГМЕНТАЦИИ ---
-TRAIN_TRANSFORMS = A.Compose([
-	A.RandomCrop(height=480, width=640, p=1.0),
+# Получаем стратегию из окружения
+SELECTED_AUG = os.environ.get("AUG_STRATEGY", "medium")
 
-	A.HorizontalFlip(p=0.5),
-	A.VerticalFlip(p=0.5),
-	A.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.05, p=0.5),
-	A.GaussianBlur(blur_limit=(3, 5), p=0.2),
+# Пресеты аугментаций
+AUG_STRATEGIES = {
+    "none": A.Compose([
+        A.CenterCrop(height=480, width=640, p=1.0), # Просто кроп без искажений
+        A.Normalize(),
+        A.pytorch.ToTensorV2()
+    ]),
+    "light": A.Compose([
+        A.RandomCrop(height=480, width=640, p=1.0),
+        
+		A.HorizontalFlip(p=0.5),
+        A.ColorJitter(brightness=0.1, contrast=0.1, p=0.5),
+        
+		A.Normalize(),
+        A.pytorch.ToTensorV2()
+    ]),
+    "medium": A.Compose([
+        A.RandomCrop(height=480, width=640, p=1.0),
+        
+		A.HorizontalFlip(p=0.5),
+        A.VerticalFlip(p=0.5),
+        A.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.05, p=0.5),
+        A.GaussianBlur(blur_limit=(3, 5), p=0.2),
+        
+		A.Normalize(),
+        A.pytorch.ToTensorV2()
+    ]),
+    "heavy": A.Compose([
+        A.RandomCrop(height=480, width=640, p=1.0),
+        
+		A.HorizontalFlip(p=0.5),
+        A.VerticalFlip(p=0.5),
+        A.RandomRotate90(p=0.5),
+        A.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, p=0.7),
+        A.GaussNoise(var_limit=(10.0, 50.0), p=0.3),
+        
+		A.Normalize(),
+        A.pytorch.ToTensorV2()
+    ])
+}
 
-	A.Normalize(),
-	A.pytorch.ToTensorV2()
-])
+TRAIN_TRANSFORMS = AUG_STRATEGIES.get(SELECTED_AUG, AUG_STRATEGIES["medium"])
 
 VAL_TRANSFORMS = A.Compose([
 	A.CenterCrop(height=480, width=640, p=1.0),
@@ -80,5 +114,9 @@ def get_train_config_dict():
 			"image_height": IMAGE_HEIGHT,
 		},
 		"color_map": COLOR_MAP.tolist(), 
-		"augmentations": A.to_dict(TRAIN_TRANSFORMS) 
+		"augmentations": {
+			"strategy": SELECTED_AUG,
+			"train_set": A.to_dict(TRAIN_TRANSFORMS) ,
+			"val_set": A.to_dict(VAL_TRANSFORMS) 
+		}
 	}

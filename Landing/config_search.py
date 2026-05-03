@@ -9,7 +9,8 @@ SEARCH_GRIDS = [
         "LEARNING_RATE": [1e-4, 3e-4],
         "OPTIMIZER": ["AdamW"],
         "EPOCHS": [1],
-        "EXTRA_KWARGS":[
+		"AUG_STRATEGY": ["none", "medium", "heavy"],
+        "EXTRA_KWARGS": [
             json.dumps({}),
             json.dumps({"decoder_attention_type": "scse"})
         ]
@@ -22,6 +23,7 @@ SEARCH_GRIDS = [
         "LEARNING_RATE": [1e-4],
         "OPTIMIZER": ["AdamW"],
         "EPOCHS": [1],
+		"AUG_STRATEGY": ["medium"],
         "EXTRA_KWARGS": [json.dumps({})]
     }
 ]

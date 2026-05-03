@@ -104,7 +104,8 @@ def main():
 			kwargs_dict = json.loads(exp.get("EXTRA_KWARGS", "{}"))
 			kwargs_str = "_" + "_".join([f"{k}-{v}" for k, v in kwargs_dict.items()]) if kwargs_dict else ""
 			
-			exp_name = f"{exp['SEG_MODEL_NAME']}_{exp['SEG_BACKBONE']}_BS{exp['BATCH_SIZE']}_{exp['OPTIMIZER']}_LR{exp['LEARNING_RATE']}{kwargs_str}"
+			aug_str = f"_AUG-{exp.get('AUG_STRATEGY', 'medium')}"
+			exp_name = f"{exp['SEG_MODEL_NAME']}_{exp['SEG_BACKBONE']}_BS{exp['BATCH_SIZE']}_{exp['OPTIMIZER']}_LR{exp['LEARNING_RATE']}{aug_str}{kwargs_str}"
 			
 			run_name = f"{session_name}/{exp_name}"
 			

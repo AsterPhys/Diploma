@@ -17,6 +17,8 @@ class DroneController:
 		self.err_sum_y = 0
 		self.err_prev_y = 0
 		
+		# Флаг первого запуска ПИД-регулятора
+		self.first_pid_run = True 
 		# Время последнего шага для расчета высоты
 		self.last_time = time.time()
 
@@ -100,7 +102,8 @@ class DroneController:
 		"""
 		curr_time = time.time()
 		dt = curr_time - self.last_time
-		if dt <= 0: dt = 0.001
+		if dt <= 0 or dt > 0.5:
+			dt = 0.1
 
 		# Находим центр экрана
 		center_u = img_w / 2.0
@@ -112,6 +115,11 @@ class DroneController:
 		# Ошибка по горизонтали картинки (u) соответствует движению ВПРАВО (Y)
 		err_x = center_v - target_v  # Если цель выше центра по v, летим вперед (+X)
 		err_y = target_u - center_u  # Если цель правее центра по u, летим вправо (+Y)
+
+		if self.first_pid_run:
+			self.err_prev_x = err_x
+			self.err_prev_y = err_y
+			self.first_pid_run = False
 
 		# ПИД для X (Вперед/Назад)
 		self.err_sum_x += err_x * dt
@@ -128,15 +136,15 @@ class DroneController:
 		self.last_time = curr_time
 
 		# Ограничение скорости для стабильности
-		vx = np.clip(vx, -1.5, 1.5)
-		vy = np.clip(vy, -1.5, 1.5)
+		vx = np.clip(vx, -1, 1)
+		vy = np.clip(vy, -1, 1)
 
 		return vx, vy
 
 	def move_velocity_ned(self, vx, vy, vz):
 		"""Отправка команды скорости в симулятор."""
 		self.client.moveByVelocityAsync(vx, vy, vz, 
-										duration=0.1, 
+										duration=1.0, 
 										drivetrain=airsim.DrivetrainType.MaxDegreeOfFreedom, 
 										yaw_mode=airsim.YawMode(False, 0))
 
@@ -156,6 +164,19 @@ class DroneController:
 		img_rgb = img1d.reshape(response.height, response.width, 3)
 		
 		return img_rgb
+
+	def get_camera_depth(self, camera_name):
+		"""
+		Запрашивает карту метрической глубины из AirSim.
+		Возвращает 2D numpy массив float32 (в метрах).
+		"""
+		responses = self.client.simGetImages([
+			airsim.ImageRequest(camera_name, airsim.ImageType.DepthPlanar, True, False)
+		])
+		response = responses[0]
+		
+		depth_img = airsim.list_to_2d_float_array(response.image_data_float, response.width, response.height)
+		return depth_img
 
 	def disarm(self):
 		"""Выключить моторы."""

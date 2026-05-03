@@ -1,6 +1,8 @@
 ﻿import os
 from dotenv import load_dotenv
 
+DEBUG = True
+
 # --- ПАРАМЕТРЫ ИСПОЛЬЗУЕМЫХ МОДЕЛЕЙ --- 
 RL_MODEL_NAME = "PPO_drone_29_04_2026_08_17_19"
 SEG_MODEL_NAME = "UNet_resnet34_28_04_2026_23_21_55"
@@ -26,8 +28,8 @@ VISION_SERVER_URL = "http://127.0.0.1:8000/predict"
 
 # --- КООРДИНАТЫ ---
 START_UE_COORDS = [0.0, 0.0, 100.0]
-FINISH_UE_COORDS = [-100.0, 0.0, 100.0]
-# FINISH_UE_COORDS = [-5015.0, -5.0, 50.0]
+# FINISH_UE_COORDS = [-100.0, 0.0, 100.0]
+FINISH_UE_COORDS = [-5015.0, -5.0, 50.0]
 
 # --- НАСТРОЙКИ ПОЛЕТА ---
 # Высота взлета (метры)
@@ -44,9 +46,9 @@ MAX_SLOPE_DEGREES = 15.0
 # Скорость снижения при посадке (м/с)
 LANDING_SPEED_Z = 0.5
 # Минимальный радиус круга в пикселях для безопасной посадки
-MIN_SAFE_ZONE_RADIUS = 20
+MIN_SAFE_ZONE_RADIUS = 50
 
 # --- ПИД РЕГУЛЯТОР ---
 PID_Kp = 0.005 
 PID_Ki = 0.0001
-PID_Kd = 0.005
+PID_Kd = 0.002

@@ -47,6 +47,13 @@ def get_preset(mode):
 			"Vehicles": {
 				"SimpleFlight": {
 					"VehicleType": "SimpleFlight",
+					# Добавляем 100% стабилизацию
+							"Gimbal": {
+								"Stabilization": 1.0, 
+								"Pitch": -90.0, 
+								"Roll": 0.0, 
+								"Yaw": 0.0
+							},
 					"Cameras": {
 						"bottom_center": {
 							"X": 0, "Y": 0, "Z": 0.2, # немного смещаем камеру вниз от центра дрона
@@ -74,15 +81,24 @@ def get_preset(mode):
 							"X": 0.2, "Y": 0.0, "Z": 0.0, 
 							"Pitch": 0.0, "Roll": 0.0, "Yaw": 0.0,
 							"CaptureSettings":[
-								{ "ImageType": 0, "Width": 640, "Height": 480, "FOV_Degrees": 90 }
+								{ "ImageType": 0, "Width": 640, "Height": 480, "FOV_Degrees": 90 },
+								{ "ImageType": 1, "Width": 640, "Height": 480, "FOV_Degrees": 90 }
 							]
 						},
 						# Камера для Посадки: сдвинута чуть вниз (Z=0.2), смотрит строго вниз (Pitch=-90)
 						"bottom_center": {
 							"X": 0.0, "Y": 0.0, "Z": 0.2, 
 							"Pitch": -90.0, "Roll": 0.0, "Yaw": 0.0,
+							# Добавляем 100% стабилизацию
+							"Gimbal": {
+								"Stabilization": 1.0, 
+								"Pitch": -90.0, 
+								"Roll": 0.0, 
+								"Yaw": 0.0
+							},
 							"CaptureSettings":[
-								{ "ImageType": 0, "Width": 640, "Height": 480, "FOV_Degrees": 90 }
+								{ "ImageType": 0, "Width": 640, "Height": 480, "FOV_Degrees": 90 },
+								{ "ImageType": 1, "Width": 640, "Height": 480, "FOV_Degrees": 90 }
 							]
 						}
 					}

@@ -32,10 +32,39 @@ class LandingMath:
 			return -1, -1, False
 
 		dist_transform = cv2.distanceTransform(combined_mask, cv2.DIST_L2, 5)
-		_, max_val, _, max_loc = cv2.minMaxLoc(dist_transform)
 		
-		# Проверяем, достаточно ли велик круг для безопасной посадки
-		if max_val < cfg.MIN_SAFE_ZONE_RADIUS:
-			return -1, -1, False
-			
-		return max_loc[0], max_loc[1], True # U, V
+		h, w = dist_transform.shape
+		center_v, center_u = h // 2, w // 2
+
+		# Если под дроном (в центре кадра) уже безопасно, то просто
+		# делаем центр нашей целью, чтобы дрон плавно сел вертикально вниз.
+		if dist_transform[center_v, center_u] >= cfg.MIN_SAFE_ZONE_RADIUS:
+			return center_u, center_v, True, combined_mask
+
+		# Маска всех потенциально безопасных точек
+		safe_mask = dist_transform >= cfg.MIN_SAFE_ZONE_RADIUS
+
+		# Если таких точек нет вообще
+		if not np.any(safe_mask):
+			return -1, -1, False, combined_mask
+
+		# Создаем сетку координат для вычисления расстояний до центра
+		y_coords, x_coords = np.indices((h, w))
+		dist_to_center = np.sqrt((x_coords - center_u)**2 + (y_coords - center_v)**2)
+
+		# Взвешенная функция стоимости
+		# Мы максимизируем расстояние до препятствий и минимизируем до центра.
+		# Коэффициент alpha определяет баланс.
+		# Score = Безопасность - (alpha * Отклонение_от_центра)
+		# Чем меньше alpha, тем безопаснее выбранная точка, чем больше, тем ближе к центру.
+
+		alpha = 0.8
+		score_map = dist_transform - (alpha * dist_to_center)
+		
+		# Исключаем из поиска точки, которые не удовлетворяют минимальной безопасности
+		score_map[~safe_mask] = -np.inf
+
+		# Находим индекс максимального скора
+		best_v, best_u = np.unravel_index(np.argmax(score_map), score_map.shape)
+
+		return best_u, best_v, True, combined_mask

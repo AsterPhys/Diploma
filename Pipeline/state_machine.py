@@ -3,6 +3,16 @@ import config_pipeline as cfg
 from enum import Enum
 import sys
 import os
+import numpy as np
+import cv2
+
+DEBUG_COLORS = {
+	0: [240, 240, 240], # Safe_Ground
+	1: [54, 52, 45],    # Obstacles
+	2: [151, 201, 32],  # Vegetation
+	3: [82, 82, 255],   # Dynamic
+	255: [0, 0, 0]      # Проблемы с сервером
+}
 
 PIPELINE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(PIPELINE_DIR)
@@ -52,6 +62,13 @@ class LandingStateMachine:
 		self.rl_agent = RLNavigator(cfg.RL_MODEL_PATH, initial_distance=self.initial_dist)
 		self.state = DroneState.TAKEOFF
 
+		# Настройки дебага
+		self.debug_dir = os.path.join(PIPELINE_DIR, "debug")
+		os.makedirs(self.debug_dir, exist_ok=True)
+		self.rl_step = 0
+		self.land_step = 0
+		print(f"[INIT] Изображения для дебага будут сохраняться в: {self.debug_dir}")
+
 	def run(self):
 		try:
 			while self.state != DroneState.DONE:
@@ -71,10 +88,16 @@ class LandingStateMachine:
 		print("[STATE] Взлет завершен. Переход к навигации RL.")
 
 	def _state_navigate(self):
-		# Запрашиваем только глубину с передней камеры
-		front_rgb = self.drone.get_camera_image("front_center")
-		depth_map = self.vision.predict_depth(front_rgb)
+		# Берем глубину из симулятора
+		depth_map = self.drone.get_camera_depth("front_center")
 		
+		if cfg.DEBUG:
+			if self.rl_step < 15:
+				# Нормализуем (0-20 метров в 0-255)
+				depth_vis = np.clip((depth_map / 20.0) * 255, 0, 255).astype(np.uint8)
+				cv2.imwrite(os.path.join(self.debug_dir, f"rl_depth_{self.rl_step:03d}.png"), depth_vis)
+			self.rl_step += 1
+
 		drone_state = self.drone.client.getMultirotorState()
 		pos = drone_state.kinematics_estimated.position
 		orient = drone_state.kinematics_estimated.orientation
@@ -84,6 +107,8 @@ class LandingStateMachine:
 		if dist < cfg.RL_ARRIVAL_DISTANCE:
 			print(f"[STATE] Цель достигнута ({dist:.2f}м). Переход к автопосадке.")
 			self.drone.stop_moving()
+			# Ждем немного для погашения инерции
+			time.sleep(2.0)
 			self.state = DroneState.AUTO_LANDING
 			return
 
@@ -94,22 +119,50 @@ class LandingStateMachine:
 
 	def _state_landing(self):
 		bottom_rgb = self.drone.get_camera_image("bottom_center")
-		semantic_mask, depth_map = self.vision.predict_landing_data(bottom_rgb)
+		bottom_depth = self.drone.get_camera_depth("bottom_center")
 		
-		target_u, target_v, is_valid = self.geom.find_best_landing_spot(semantic_mask, depth_map, cfg.MAX_SLOPE_DEGREES)
+		# Сегментация с сервера
+		semantic_mask = self.vision.predict_landing_mask(bottom_rgb)
+
+		target_u, target_v, is_valid, combined_mask = self.geom.find_best_landing_spot(
+			semantic_mask, bottom_depth, cfg.MAX_SLOPE_DEGREES
+		)
 		
+		if cfg.DEBUG:
+			if self.land_step % 3 == 0:
+				prefix = os.path.join(self.debug_dir, f"land_{self.land_step:04d}")
+			
+				#  RGB
+				cv2.imwrite(f"{prefix}_1_rgb.jpg", bottom_rgb)
+			
+				# Маска
+				colored_mask = np.zeros((*semantic_mask.shape, 3), dtype=np.uint8)
+				for cls_id, color in DEBUG_COLORS.items():
+					colored_mask[semantic_mask == cls_id] = color
+				cv2.imwrite(f"{prefix}_2_semantic.png", colored_mask)
+			
+				# Итоговая маска с выбранной точкой
+				comb_vis = (combined_mask * 255).astype(np.uint8)
+				comb_vis = cv2.cvtColor(comb_vis, cv2.COLOR_GRAY2BGR)
+				if is_valid:
+					cv2.circle(comb_vis, (int(target_u), int(target_v)), 7, (0, 0, 255), -1)
+				cv2.imwrite(f"{prefix}_3_target.png", comb_vis)
+		
+			self.land_step += 1
+
 		if not is_valid:
-			print("[Посадка] Безопасная зона не найдена! Ищу...")
-			# Если зона не найдена, летим медленно вверх и вперед, чтобы изменить обзор
-			self.drone.move_velocity_ned(0.5, 0.0, -0.2) 
-			time.sleep(0.1)
+			print("[Посадка] Безопасная зона не найдена! Выравниваюсь и ищу...")
+			# Сбрасываем скорость до 0, чтобы дрон выровнял крен и камера снова посмотрела вниз
+			self.drone.move_velocity_ned(0.0, 0.0, 0.0)
 			return
 
-		vx, vy = self.drone.pid_compute_velocity(target_u, target_v, cfg.IMAGE_WIDTH, cfg.IMAGE_HEIGHT, 
-												 cfg.PID_Kp, cfg.PID_Ki, cfg.PID_Kd)
+		vx, vy = self.drone.pid_compute_velocity(
+			target_u, target_v, cfg.IMAGE_WIDTH, cfg.IMAGE_HEIGHT, 
+			cfg.PID_Kp, cfg.PID_Ki, cfg.PID_Kd
+		)
 		
 		center_y, center_x = cfg.IMAGE_HEIGHT // 2, cfg.IMAGE_WIDTH // 2
-		distance_to_ground = depth_map[center_y, center_x]
+		distance_to_ground = bottom_depth[center_y, center_x]
 
 		if distance_to_ground < 0.4:
 			print("[Посадка] Касание земли. Моторы выключены.")
@@ -122,7 +175,6 @@ class LandingStateMachine:
 		else:
 			# Снижаемся с заданной скоростью
 			self.drone.move_velocity_ned(vx, vy, cfg.LANDING_SPEED_Z)
-			time.sleep(0.1)
 
 if __name__ == "__main__":
 	sm = LandingStateMachine()

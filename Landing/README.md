@@ -40,9 +40,15 @@
 
 - Автоматическая очистка (рекомендуется после сбора):
 ```python utils.py --clean-masks --clean-dark```
-- Удалить конкретные кадры вручную:
-```python utils.py --delete 10 15 42```
+- Полное удаление при автоматическое очистке:
+```python utils.py --clean-masks --clean-dark --delete```
+- Обработка конкретных кадров вручную:
+```python utils.py --names 10 15 42```
 
-## 5. Просмотр графиков (TensorBoard)
+## 5. Разделение датасета на трейн/тест (Utils)
+
+```python utils.py --split --src my_raw_dataset --dst final_ml_dataset --test-count 100```
+
+## 6. Просмотр графиков (TensorBoard)
 Чтобы сравнить графики метрик и Loss для разных экспериментов:
 ```tensorboard --logdir runs/segmentation```

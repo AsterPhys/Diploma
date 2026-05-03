@@ -12,8 +12,8 @@ ALGORITHM = "SAC" # "PPO" / "SAC"
 # Имя текущего рана (если None, сгенерируется по времени)
 # Если указать существующую папку (например "PPO_run_12_10_2023_14_00"), скрипт продолжит обучение
 EXPERIMENT_NAME = None
-
-LOAD_FROM_RUN_NAME = "PPO_drone_30_04_2026_09_56_09"
+9
+LOAD_FROM_RUN_NAME = None
 DEBUG = False
 
 # --- ПУТИ ---

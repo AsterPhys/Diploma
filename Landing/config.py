@@ -8,6 +8,7 @@ import numpy as np
 # --- ПУТИ ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, 'data')
+DATA2DEL_DIR = os.path.join(BASE_DIR, 'data_deleted')
 
 RGB_DIR = os.path.join(DATA_DIR, 'rgb')
 DEPTH_DIR = os.path.join(DATA_DIR, 'depth')

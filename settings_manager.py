@@ -21,16 +21,28 @@ def get_preset(mode):
 
 	if mode in ["rl_train", "rl_test"]:
 		view_mode = "NoDisplay" if mode == "rl_train" else "SpringArmChase"
-		clock_speed = 2.0 if mode == "rl_train" else 1.0
+		clock_speed = 1.0 if mode == "rl_train" else 1.0
 
 		base_settings.update({
 			"ViewMode": view_mode,
 			"ClockSpeed": clock_speed,
-			"CameraDefaults": {
-				"CaptureSettings":[{"ImageType": 1, "Width": 84, "Height": 84, "FOV_Degrees": 90}]
+			"Vehicles": {
+				"SimpleFlight": {
+					"VehicleType": "SimpleFlight",
+					"Cameras": {
+						"front_center": {
+							"X": 0.5, "Y": 0.0, "Z": 0.0,
+							"Pitch": 0.0, "Roll": 0.0, "Yaw": 0.0,
+							"CaptureSettings": [
+								{"ImageType": 1, "Width": 84, "Height": 84, "FOV_Degrees": 90}
+							]
+						}
+					}
+				}
 			},
-			"SubWindows":[
-				{"WindowID": 0, "CameraName": "0", "ImageType": 1, "Visible": False}
+			"SubWindows": [
+				# SubWindow привязан к конкретной камере
+				{"WindowID": 0, "CameraName": "front_center", "ImageType": 1, "Visible": False}
 			]
 		})
 	elif mode in ["collect", "land"]:
@@ -71,18 +83,18 @@ def get_preset(mode):
 	elif mode == "pipeline":
 		base_settings.update({
 			"ViewMode": "SpringArmChase",
-			"ClockSpeed": 2.0,
+			"ClockSpeed": 1.0,
 			"Vehicles": {
 				"SimpleFlight": {
 					"VehicleType": "SimpleFlight",
 					"Cameras": {
 						# Камера для RL: сдвинута чуть вперед (X=0.2), смотрит прямо (Pitch=0)
 						"front_center": {
-							"X": 0.2, "Y": 0.0, "Z": 0.0, 
+							"X": 0.5, "Y": 0.0, "Z": 0.0, 
 							"Pitch": 0.0, "Roll": 0.0, "Yaw": 0.0,
 							"CaptureSettings":[
 								{ "ImageType": 0, "Width": 640, "Height": 480, "FOV_Degrees": 90 },
-								{ "ImageType": 1, "Width": 640, "Height": 480, "FOV_Degrees": 90 }
+								{ "ImageType": 1, "Width": 84, "Height": 84, "FOV_Degrees": 90 }
 							]
 						},
 						# Камера для Посадки: сдвинута чуть вниз (Z=0.2), смотрит строго вниз (Pitch=-90)

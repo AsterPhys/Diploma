@@ -17,7 +17,9 @@ HF_TOKEN = os.getenv("HF_TOKEN")
 
 ROOT_DIR = os.path.dirname(BASE_DIR)
 
-RL_MODEL_PATH = os.path.join(ROOT_DIR, 'RL_agent', 'models', RL_MODEL_NAME, 'latest_model.zip')
+RL_RUN_DIR = os.path.join(ROOT_DIR, 'RL_agent', 'models', RL_MODEL_NAME)
+RL_MODEL_PATH = os.path.join(RL_RUN_DIR, 'latest_model.zip')
+RL_CONFIG_PATH = os.path.join(RL_RUN_DIR, 'run_config.json')
 
 SEG_RUN_DIR = os.path.join(ROOT_DIR, 'Landing', 'runs', 'segmentation', SEG_MODEL_NAME)
 SEG_MODEL_PATH = os.path.join(SEG_RUN_DIR, f'model_epoch_{SEG_MODEL_EPOCH}.pth')
@@ -29,7 +31,7 @@ VISION_SERVER_URL = "http://127.0.0.1:8000/predict"
 # --- КООРДИНАТЫ ---
 START_UE_COORDS = [0.0, 0.0, 100.0]
 # FINISH_UE_COORDS = [-100.0, 0.0, 100.0]
-FINISH_UE_COORDS = [-5015.0, -5.0, 50.0]
+FINISH_UE_COORDS = [3240.0, -360.0, 50.0]
 
 # --- НАСТРОЙКИ ПОЛЕТА ---
 # Высота взлета (метры)
@@ -39,6 +41,7 @@ RL_ARRIVAL_DISTANCE = 15.0
 CAMERA_FOV = 90.0
 IMAGE_WIDTH = 640
 IMAGE_HEIGHT = 480
+MAX_SPEED = 1.0
 
 # --- НАСТРОЙКИ ПОСАДКИ ---
 # Максимальный допустимый угол наклона поверхности

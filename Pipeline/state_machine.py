@@ -84,6 +84,12 @@ class LandingStateMachine:
 
 	def _state_takeoff(self):
 		self.drone.arm_and_takeoff(cfg.TAKEOFF_ALTITUDE)
+		
+		print("[STATE] Прогрев камеры перед навигацией...")
+		for _ in range(5):
+			self.drone.get_camera_depth("front_center")
+			time.sleep(0.1)
+
 		self.state = DroneState.NAVIGATE_RL
 		print("[STATE] Взлет завершен. Переход к навигации RL.")
 
@@ -91,8 +97,14 @@ class LandingStateMachine:
 		# Берем глубину из симулятора
 		depth_map = self.drone.get_camera_depth("front_center")
 		
+		# Если максимальное значение глубины близко к нулю, значит кадр пустой
+		if np.max(depth_map) < 0.1:
+			print("[WARN] Камера вернула черный кадр. Ожидание...")
+			time.sleep(0.1)
+			return # Пропускаем итерацию, дрон просто висит на месте
+
 		if cfg.DEBUG:
-			if self.rl_step < 15:
+			if self.rl_step % 3 == 0:
 				# Нормализуем (0-20 метров в 0-255)
 				depth_vis = np.clip((depth_map / 20.0) * 255, 0, 255).astype(np.uint8)
 				cv2.imwrite(os.path.join(self.debug_dir, f"rl_depth_{self.rl_step:03d}.png"), depth_vis)
@@ -115,7 +127,8 @@ class LandingStateMachine:
 		vector = self.rl_agent.get_body_frame_vector(pos, orient, self.target_ned)
 		action = self.rl_agent.predict(depth_map, vector)
 		
-		self.drone.move_by_action(action)
+		self.drone.move_by_action(action, max_speed=self.rl_agent.max_speed)
+		time.sleep(self.rl_agent.move_time)
 
 	def _state_landing(self):
 		bottom_rgb = self.drone.get_camera_image("bottom_center")

@@ -202,6 +202,13 @@ class ColosseumDroneEnv(gym.Env):
 		self.client.simContinueForTime(0.2)
 		_ = self.client.simGetCollisionInfo()
 
+		# Прогрев камеры
+		for _ in range(3):
+			self.client.simGetImages([
+				airsim.ImageRequest("0", airsim.ImageType.DepthPlanar, True, False)
+			])
+			time.sleep(0.05)
+
 		self.current_step = 0
 		self.prev_distance = self.MAX_DISTANCE
 

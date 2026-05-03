@@ -2,6 +2,7 @@
 import numpy as np
 import time
 import pymap3d as pm
+from scipy.spatial.transform import Rotation as R
 
 class DroneController:
 	def __init__(self):
@@ -70,19 +71,37 @@ class DroneController:
 		self.client.takeoffAsync().join()
 		self.client.moveToZAsync(-altitude_meters, 5).join()
 
-	def move_by_action(self, action, speed_limit=5.0):
+	def move_by_action(self, action, max_speed=5):
 		"""
 		Выполняет действие от RL-агента.
-		action: [vx, vy, vz] (обычно в диапазоне -1..1)
+		action: [vx, vy, vz]
 		"""
 		# [[x,y,z]] -> [x,y,z]
 		action = np.squeeze(action) 
 
-		vx = float(action[0]) * speed_limit
-		vy = float(action[1]) * speed_limit
-		vz = float(action[2]) * speed_limit
+		# Получаем скорости в локальной системе дрона (Body Frame)
+		vx_body = float(action[0]) * max_speed
+		vy_body = float(action[1]) * max_speed
+		vz_body = float(action[2]) * max_speed
+		v_body = np.array([vx_body, vy_body, vz_body])
+
+		# Получаем текущую ориентацию дрона
+		state = self.client.getMultirotorState()
+		orientation = state.kinematics_estimated.orientation
+		drone_quat = [orientation.x_val, orientation.y_val, orientation.z_val, orientation.w_val]
+
+		#  Переводим вектор из Body Frame в World Frame
+		rotation = R.from_quat(drone_quat)
+		v_world = rotation.apply(v_body)
+
+		vx_w = float(v_world[0])
+		vy_w = float(v_world[1])
+		vz_w = float(v_world[2])
 		
-		self.client.moveByVelocityAsync(vx, vy, vz, duration=0.1)
+		# Делаем duration большим, чтобы дрон летел более плавно.
+		# Это нужно для того, чтобы дрон не тормозил между командами, 
+		# следующая команда все равно перезапишет текущую на лету.
+		self.client.moveByVelocityAsync(vx_w, vy_w, vz_w, duration=10.0)
 
 	def stop_moving(self):
 		"""Мгновенная остановка."""
@@ -146,7 +165,7 @@ class DroneController:
 		self.client.moveByVelocityAsync(vx, vy, vz, 
 										duration=1.0, 
 										drivetrain=airsim.DrivetrainType.MaxDegreeOfFreedom, 
-										yaw_mode=airsim.YawMode(False, 0))
+										yaw_mode=airsim.YawMode(True, 0))
 
 	# --- СЕНСОРЫ ---
 

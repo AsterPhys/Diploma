@@ -1,6 +1,5 @@
-﻿```markdown
-# Модуль Pipeline
-## 1. Архитектура боевого пайплайна
+﻿# Модуль Pipeline
+## 1. Архитектура пайплайна
 `Pipeline` — интеграционный модуль исполнения миссии в реальном времени. Центральный компонент — `state_machine.py`, который последовательно выполняет:
 1. взлет;
 2. навигацию к целевой зоне RL-агентом;
@@ -8,8 +7,8 @@
 4. выбор безопасной точки по семантике + геометрии;
 5. снижение и завершение миссии.
 Модуль работает поверх AirSim API и использует:
-- RL-модель из `RL_agent`,
-- сегментационную модель через FastAPI-сервис (`modules/vision_server.py`).
+  - RL-модель из `RL_agent`,
+  - сегментационную модель через FastAPI-сервис (`modules/vision_server.py`).
 ## 2. Разбор `state_machine.py`
 Определены состояния `DroneState`:
 - `TAKEOFF`
@@ -22,7 +21,7 @@
 - переход в `NAVIGATE_RL`.
 ### `NAVIGATE_RL`
 - получение depth-кадра `front_center`;
-- проверка на пустой кадр (черный depth);
+- проверка на пустой кадр;
 - вычисление дистанции до цели;
 - если достигнут радиус прибытия (`RL_ARRIVAL_DISTANCE`) → остановка + переход в `AUTO_LANDING`;
 - иначе:
@@ -50,7 +49,7 @@
   - HTTP-клиент к FastAPI,
   - сериализация кадра в base64 и декод маски.
 - `geometry.py` (`LandingMath`):
-  - оценка уклона поверхности (Sobel + фокусное),
+  - оценка уклона поверхности,
   - объединение семантических и геометрических ограничений,
   - выбор landing spot.
 - `rl_wrapper.py` (`RLNavigator`):
@@ -62,19 +61,28 @@
   - загружает архитектуру и веса из сохраненного train-конфига.
 ## 4. Диаграмма автомата состояний
 ```mermaid
-stateDiagram-v2
-    [*] --> TAKEOFF
-    TAKEOFF --> NAVIGATE_RL: взлет завершен
-    NAVIGATE_RL --> NAVIGATE_RL: dist > threshold\nполучить depth -> predict RL -> move
-    NAVIGATE_RL --> AUTO_LANDING: dist <= RL_ARRIVAL_DISTANCE
-    AUTO_LANDING --> AUTO_LANDING: нет безопасной зоны\nили требуется доцентрирование
-    AUTO_LANDING --> DONE: касание земли + disarm
-    DONE --> [*]
+flowchart TD
+Start(( )) --> A([TAKEOFF])
+
+A -->|Взлет завершен| B([NAVIGATE_RL])
+B --> CheckDist{Далеко?}
+CheckDist ---->|Да: Predict ➔ Move| B
+CheckDist -->|Нет: dist <= RL_ARRIVAL| C([AUTO_LANDING])
+C --> CheckSafe{Приземлился?}
+CheckSafe ---->|Нет: Центрирование| C
+CheckSafe -->|Да: Касание земли| D([DONE])
+D --> End(( ))
+
+style Start fill:#fff,stroke:#fff
+style End fill:#fff,stroke:#fff
+style CheckDist fill:#333,stroke:#8B9BB4,color:#fff
+style CheckSafe fill:#333,stroke:#8B9BB4,color:#fff
 ```
 
 ## 5. Диаграмма взаимодействия модулей
 
-```flowchart LR
+```mermaid
+flowchart LR
     SM[state_machine.py]
 
     C[modules/control.py]

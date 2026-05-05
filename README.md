@@ -57,8 +57,8 @@
 ┃ ┣ 📜 landing.md # Документация модуля посадки
 ┃ ┣ 📜 pipeline.md # Описание State Machine и интеграции
 ┃ ┣ 📜 rl_agent.md # Документация обучения навигации
-┃ ┣ 📜 installation_and_configuration.md # Описание State Machine и интеграции
-┃ ┗ 📜 launching_and_using.md # Описание State Machine и интеграции
+┃ ┣ 📜 installation_and_configuration.md # Установка и настройка
+┃ ┗ 📜 launching_and_using.md # Запуск и использование
 ┣ 📂 demonstration/ # Демонстрационные материалы
 ┣ 📂 RL_agent/ # Модуль обучения навигации (PPO/SAC)
 ┃ ┣ 📂 models/ # Сохраненные веса и логи TensorBoard

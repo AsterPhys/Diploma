@@ -1,4 +1,4 @@
-﻿import numpy as np
+import numpy as np
 import cv2
 import config_pipeline as cfg
 

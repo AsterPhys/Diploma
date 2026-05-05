@@ -1,4 +1,4 @@
-﻿import time
+import time
 import os
 from huggingface_hub import HfApi
 from huggingface_hub.utils import HfHubHTTPError

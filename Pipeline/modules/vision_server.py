@@ -1,4 +1,4 @@
-﻿import sys
+import sys
 import os
 
 # === НАСТРОЙКИ И ФИКСЫ ДЛЯ AMD ROCm ===

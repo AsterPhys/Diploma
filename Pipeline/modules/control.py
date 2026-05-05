@@ -1,4 +1,4 @@
-﻿import airsim
+import airsim
 import numpy as np
 import time
 import pymap3d as pm

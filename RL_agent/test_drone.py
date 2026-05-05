@@ -1,4 +1,4 @@
-﻿import os
+import os
 import argparse
 import time
 from stable_baselines3 import PPO, SAC

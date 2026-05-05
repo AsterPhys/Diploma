@@ -1,4 +1,4 @@
-﻿import os
+import os
 import cv2
 
 # Настройки и фиксы для обучения на AMD

@@ -1,4 +1,4 @@
-﻿import os
+import os
 import argparse
 import config
 import cv2

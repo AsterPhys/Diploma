@@ -1,4 +1,4 @@
-﻿import json
+import json
 
 SEARCH_GRIDS = [
     # 1. Эксперименты для UNet

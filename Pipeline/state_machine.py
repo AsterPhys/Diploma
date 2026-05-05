@@ -1,4 +1,4 @@
-﻿import time
+import time
 import config_pipeline as cfg
 from enum import Enum
 import sys

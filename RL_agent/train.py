@@ -177,7 +177,7 @@ class CurriculumCallback(BaseCallback):
 			self.save_state()
 
 		# == Проверка уровня и маршрутов ==
-		if self.n_calls % self.check_freq == 0:
+		if self.num_timesteps > 0 and self.num_timesteps % self.check_freq == 0:
 			env = self.training_env.envs[0].unwrapped
 			current_lvl = env.current_level
 			max_lvl = env.max_level
@@ -220,7 +220,7 @@ class CurriculumCallback(BaseCallback):
 						rate = np.mean(buf) * 100 if len(buf) > 0 else 0.0
 						stats_str.append(f"Маршрут {r_idx}: {rate:.0f}% ({len(buf)}/{self.window_size_per_route})")
 
-					print(f"[{self.n_calls}] Level {current_lvl} | " + " | ".join(stats_str))
+					print(f"[{self.num_timesteps}] Level {current_lvl} | " + " | ".join(stats_str))
 					print(f"Шагов до разблокировки: {self.steps_since_last_unlock}/{self.max_steps_per_route_unlock}")
 					print(f"Шагов на уровне: {self.steps_in_current_level}/{self.max_steps_per_level}")
 
@@ -247,7 +247,6 @@ class CurriculumCallback(BaseCallback):
 					self.steps_since_last_unlock = 0
 					self.route_buffers.clear()
 
-					self.save_state(save_buffer=True)
 					sys.exit(42)
 		
 		return True
@@ -271,6 +270,8 @@ def dump_config(run_dir):
 		json.dump(conf_dict, f, indent=4, ensure_ascii=False)
 
 def main():
+	global LAST_STEP_TIME
+
 	# Запуск Watchdog
 	wd_thread = threading.Thread(target=watchdog_thread, daemon=True)
 	wd_thread.start()
@@ -423,6 +424,8 @@ def main():
 		print(f"Обучение было прервано. Сохраняем модель...\n{e}")
 		sys.exit(1)
 	finally:
+		# Даем скрипту огромный таймаут, чтобы watchdog не убил его во время сохранения буфера
+		LAST_STEP_TIME = time.time() + 999999 
 		curriculum_callback.save_state(save_buffer=True)
 		env.close()
 

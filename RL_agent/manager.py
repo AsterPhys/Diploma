@@ -30,6 +30,12 @@ def get_current_map_name(run_name):
 	'''
 	current_level = 0
 	state_path = os.path.join(config.MODELS_DIR, run_name, "state.json")
+	
+	if not os.path.exists(state_path) and getattr(config, "LOAD_FROM_RUN_NAME", None):
+		source_state_path = os.path.join(config.MODELS_DIR, config.LOAD_FROM_RUN_NAME, "state.json")
+		if os.path.exists(source_state_path):
+			state_path = source_state_path
+	
 	if os.path.exists(state_path):
 		with open(state_path, "r") as f:
 			state_data = json.load(f)

@@ -13,7 +13,7 @@ ALGORITHM = "SAC" # "PPO" / "SAC"
 # Если указать существующую папку (например "PPO_run_12_10_2023_14_00"), скрипт продолжит обучение
 EXPERIMENT_NAME = None
 
-LOAD_FROM_RUN_NAME = "SAC_drone_04_05_2026_00_26_42"
+LOAD_FROM_RUN_NAME = "SAC_drone_05_05_2026_00_08_36"
 DEBUG = False
 
 # --- ПУТИ ---

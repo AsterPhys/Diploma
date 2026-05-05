@@ -52,6 +52,14 @@
 
 ```text
 📦 Project Root
+┣ 📂 docs/ # Техническая документация проекта
+┃ ┣ 📜 README.md # Общая архитектура и связи модулей
+┃ ┣ 📜 landing.md # Документация модуля посадки
+┃ ┣ 📜 pipeline.md # Описание State Machine и интеграции
+┃ ┣ 📜 rl_agent.md # Документация обучения навигации
+┃ ┣ 📜 installation_and_configuration.md # Описание State Machine и интеграции
+┃ ┗ 📜 launching_and_using.md # Описание State Machine и интеграции
+┣ 📂 demonstration/ # Демонстрационные материалы
 ┣ 📂 RL_agent/ # Модуль обучения навигации (PPO/SAC)
 ┃ ┣ 📂 models/ # Сохраненные веса и логи TensorBoard
 ┃ ┣ 📜 config.py # Гиперпараметры RL
@@ -72,17 +80,21 @@
 ┗ 📜 README.md # Документация проекта
 ```
 
-## Установка и настройка
+## Документация
 
-TODO
+В документации вы можете ознакомиться со следующими разделами:
 
-## Запуск и использование
-
-TODO
+- Установка и настройка (`docs/installation_and_configuration.md`)
+- Запуск и использование (`docs/launching_and_using.md`)
+- Общая архитектура проекта (`docs/README.md`) и отдельных модулей (`docs/landing.md, docs/rl_agent.md, docs/pipeline.md`)
 
 ## Демонстрация работы
 
-TODO
+Вы можете ознакомиться с полным текстом диплома, демонстрационными видео и фото в папке demonstration.
+
+## Датасет
+
+Специально для обучения модели семантической сегментации в ходе разработки был сформирован датасет `airsim-drone-dataset`,  с которым можно ознакомиться по ссылке: [![Dataset on Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Dataset-FFD21E)](https://huggingface.co/datasets/asterphys/airsim-drone-dataset)
 
 ## Автор и контакты
 

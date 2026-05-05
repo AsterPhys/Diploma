@@ -388,3 +388,5 @@ RL_agent/ppo_drone_tensorboard/
 /Landing/data_deleted
 /Diploma.pyproj
 /Diploma.sln
+/Landing/yolo_train_data
+/Landing/yolo_vis

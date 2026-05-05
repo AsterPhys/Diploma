@@ -1,4 +1,4 @@
-# ===============================================
+﻿# ===============================================
 # Конфигурация для обучения семантической посадки
 # ===============================================
 
@@ -7,7 +7,7 @@ import numpy as np
 
 # --- ПУТИ ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(BASE_DIR, 'data')
+DATA_DIR = os.path.join(BASE_DIR, 'dataset', 'train')
 DATA2DEL_DIR = os.path.join(BASE_DIR, 'data_deleted')
 
 RGB_DIR = os.path.join(DATA_DIR, 'rgb')
@@ -17,6 +17,9 @@ DEPTH_VIS_DIR = os.path.join(DATA_DIR, 'depth_vis')
 MASK_VIS_DIR = os.path.join(DATA_DIR, 'mask_vis')
 
 MODELS_DIR = os.path.join(BASE_DIR, 'runs', 'segmentation')
+
+YOLO_DATA_DIR = os.path.join(BASE_DIR, 'yolo_train_data')
+YOLO_VISUALIZATION_DIR = os.path.join(BASE_DIR, 'yolo_vis')
 
 # --- UNREAL ENGINE SETTINGS ---
 UE_EXECUTABLE = r"D:\ProgramFiles\UE_5.4\Engine\Binaries\Win64\UnrealEditor.exe"

@@ -1,4 +1,4 @@
-import os
+﻿import os
 import cv2
 
 # Настройки и фиксы для обучения на AMD
@@ -17,6 +17,7 @@ import numpy as np
 from tqdm import tqdm
 import glob
 import re
+from thop import profile
 
 import torch
 import torchvision
@@ -51,7 +52,7 @@ def paint_segmap(mask):
 
 def get_intersection_and_union(pred_masks, true_masks, num_classes):
 	"""
-	Возвращает значения Intersection и Union для каждого класса.
+	Возвращает значения Intersection, Union, TP, FP и FN для каждого класса.
 	"""
 	preds = torch.argmax(pred_masks, dim=1)
 	
@@ -60,10 +61,18 @@ def get_intersection_and_union(pred_masks, true_masks, num_classes):
 		pred_inds = (preds == cls)
 		target_inds = (true_masks == cls)
 
-		intersection = (pred_inds & target_inds).sum().item()
+		intersection = (pred_inds & target_inds).sum().item() # Это же и TP
 		union = (pred_inds | target_inds).sum().item()
+		fp = (pred_inds & ~target_inds).sum().item()
+		fn = (~pred_inds & target_inds).sum().item()
 		
-		metrics[cls] = {"intersection": intersection, "union": union}
+		metrics[cls] = {
+			"intersection": intersection,
+			"union": union,
+			"tp": intersection,
+			"fp": fp,
+			"fn": fn
+		}
 
 	# Бинарный IoU (Safe_Ground vs Все остальные классы - препятствия)
 	pred_danger = (preds > 0)
@@ -71,10 +80,15 @@ def get_intersection_and_union(pred_masks, true_masks, num_classes):
 
 	danger_intersection = (pred_danger & target_danger).sum().item()
 	danger_union = (pred_danger | target_danger).sum().item()
+	danger_fp = (pred_danger & ~target_danger).sum().item()
+	danger_fn = (~pred_danger & target_danger).sum().item()
 
 	metrics["any_obstacle"] = {
 		"intersection": danger_intersection, 
-		"union": danger_union
+		"union": danger_union,
+		"tp": danger_intersection,
+		"fp": danger_fp,
+		"fn": danger_fn
 	}
 
 	return metrics
@@ -226,6 +240,20 @@ def train_model():
 	if config_train.CRITERION == "CrossEntropyLoss":
 		criterion = nn.CrossEntropyLoss()
 
+	# ======== Оценка алгоритмической сложности модели и подготовка метрик ========
+	metrics_file = os.path.join(run_dir, "metrics.json")
+	metrics_data = {"model_stats": {"macs_g": 0.0, "params_m": 0.0}, "history":[]}
+
+	dummy_input = torch.randn(1, 3, config.IMAGE_HEIGHT, config.IMAGE_WIDTH).to(device)
+	macs, params = profile(model, inputs=(dummy_input, ), verbose=False)
+
+	metrics_data["model_stats"]["macs_g"] = round(macs / 1e9, 4)
+	metrics_data["model_stats"]["params_m"] = round(params / 1e6, 4)
+		
+	print(f"\n[MODEL STATS] Архитектура: {config_train.SEG_MODEL_NAME} | Backbone: {config_train.SEG_BACKBONE}")
+	print(f"[MODEL STATS] Вычислительная сложность (MACs): {metrics_data['model_stats']['macs_g']} G")
+	print(f"[MODEL STATS] Количество параметров: {metrics_data['model_stats']['params_m']} M\n")
+
 	# ======== Восстановление из чекпоинта ========
 	start_epoch = 0
 	best_val_iou = 0.0
@@ -245,6 +273,19 @@ def train_model():
 		model.load_state_dict(checkpoint['model_state_dict'])
 		optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 		start_epoch = checkpoint['epoch']
+
+		# --- Подгружаем историю метрик ---
+		if os.path.exists(metrics_file):
+			with open(metrics_file, "r", encoding="utf-8") as f:
+				try:
+					loaded_metrics = json.load(f)
+					# Оставляем историю только до той эпохи, с которой восстанавливаемся
+					loaded_metrics["history"] = [h for h in loaded_metrics.get("history", []) if h["epoch"] <= start_epoch]
+					metrics_data = loaded_metrics
+					print(f"[RESUME] Восстановлена история метрик ({len(metrics_data['history'])} эпох)")
+				except Exception as e:
+					print(f"[ОШИБКА] Не удалось прочитать {metrics_file}: {e}")
+
 		print(f"[RESUME] Обучение продолжится с эпохи {start_epoch + 1}\n")
 
 	# ======== Цикл обучения ========
@@ -279,13 +320,17 @@ def train_model():
 		model.eval()
 		val_loss = 0
 
-		total_intersections = {i: 0 for i in list(range(config_train.NUM_CLASSES)) + ["any_obstacle"]}
-		total_unions = {i: 0 for i in list(range(config_train.NUM_CLASSES)) + ["any_obstacle"]}
+		keys = list(range(config_train.NUM_CLASSES)) + ["any_obstacle"]
+		total_metrics = {k: {"intersection": 0, "union": 0, "tp": 0, "fp": 0, "fn": 0} for k in keys}
 
 		# Сохраняем первый батч для визуализации
 		# P.S.: можно было бы и брать последний батч, на такой вариант
 		# немного чище
 		visual_images, visual_masks, visual_preds = None, None, None
+
+		# Переменные для замера производительности (FPS / Latency)
+		total_time_ms = 0.0
+		total_frames = 0
 
 		with torch.no_grad():
 			pbar = tqdm(val_loader, desc=f"Validation {epoch+1}/{config_train.EPOCHS}")
@@ -293,16 +338,26 @@ def train_model():
 				val_images = val_images.to(device)
 				val_masks = val_masks.to(device)
 
+				# Замеряем время инференса
+				start_event = torch.cuda.Event(enable_timing=True)
+				end_event = torch.cuda.Event(enable_timing=True)
+
+				start_event.record()
 				val_outputs = model(val_images)
+				end_event.record()
+
+				torch.cuda.synchronize()
+				total_time_ms += start_event.elapsed_time(end_event)
+				total_frames += val_images.size(0)
 
 				loss = criterion(val_outputs, val_masks)
 				val_loss += loss.item()
 
-				# Метрика IOU
+				# Метрики IOU, Precision, Recall
 				batch_metrics = get_intersection_and_union(val_outputs, val_masks, config_train.NUM_CLASSES)
-				for key, vals in batch_metrics.items():
-					total_intersections[key] += vals["intersection"]
-					total_unions[key] += vals["union"]
+				for key in keys:
+					for metric_name in["intersection", "union", "tp", "fp", "fn"]:
+						total_metrics[key][metric_name] += batch_metrics[key][metric_name]
 
 				# Сохраняем первый батч для визуализации
 				if batch_idx == 0:
@@ -314,25 +369,42 @@ def train_model():
 
 			# Считаем IoU для каждого класса за эпоху
 			mean_ious = {}
-			for key in list(range(config_train.NUM_CLASSES)) + ["any_obstacle"]:
-				if total_unions[key] > 0:
-					mean_ious[key] = total_intersections[key] / total_unions[key]
-				else:
-					mean_ious[key] = 0.0 # Если класса не было в валидации
+			for key in keys:
+				union = total_metrics[key]["union"]
+				intersection = total_metrics[key]["intersection"]
+				mean_ious[key] = intersection / union if union > 0 else 0.0 # Если класса не было в валидации
 
 			# Общий mIoU
 			# считаем только по базовым классам
-			valid_class_ious = [mean_ious[i] for i in range(config_train.NUM_CLASSES) if total_unions[i] > 0]
+			valid_class_ious = [mean_ious[i] for i in range(config_train.NUM_CLASSES) if total_metrics[i]["union"] > 0]
 			mIoU = np.mean(valid_class_ious) if valid_class_ious else 0.0
 
+			# Precision для Safe_Ground (Класс 0) -> Насколько мы уверены, что там безопасно
+			tp_sg = total_metrics[0]["tp"]
+			fp_sg = total_metrics[0]["fp"]
+			safe_ground_precision = tp_sg / (tp_sg + fp_sg) if (tp_sg + fp_sg) > 0 else 0.0
+
+			# Recall для Any_Obstacle -> Какую долю реальных препятствий мы обнаружили
+			tp_obs = total_metrics["any_obstacle"]["tp"]
+			fn_obs = total_metrics["any_obstacle"]["fn"]
+			any_obstacle_recall = tp_obs / (tp_obs + fn_obs) if (tp_obs + fn_obs) > 0 else 0.0
+
+			# Производительность (Latency & FPS)
+			avg_latency_ms = total_time_ms / total_frames if total_frames > 0 else 0.0
+			fps = 1000.0 / avg_latency_ms if avg_latency_ms > 0 else 0.0
+
 			writer.add_scalar("Loss/Validation", avg_val_loss, epoch)
-			writer.add_scalar("Metrics/mIoU_All_Classes", mIoU, epoch)
-			# Отдельно сохраняем IoU для Safe_Ground
-			writer.add_scalar("Metrics/IoU_Safe_Ground", mean_ious[0], epoch)
-			writer.add_scalar("Metrics/IoU_Static_Obstacle", mean_ious[1], epoch)
-			writer.add_scalar("Metrics/IoU_Vegetation", mean_ious[2], epoch)
-			writer.add_scalar("Metrics/IoU_Dynamic_Obstacle", mean_ious[3], epoch)
-			writer.add_scalar("Metrics/IoU_Any_Obstacle", mean_ious["any_obstacle"], epoch)
+			writer.add_scalar("Metrics_IoU/mIoU_All_Classes", mIoU, epoch)
+			writer.add_scalar("Metrics_IoU/Safe_Ground", mean_ious[0], epoch)
+			writer.add_scalar("Metrics_IoU/Static_Obstacle", mean_ious[1], epoch)
+			writer.add_scalar("Metrics_IoU/Vegetation", mean_ious[2], epoch)
+			writer.add_scalar("Metrics_IoU/Dynamic_Obstacle", mean_ious[3], epoch)
+			writer.add_scalar("Metrics_IoU/Any_Obstacle", mean_ious["any_obstacle"], epoch)
+
+			writer.add_scalar("Metrics_safety/Precision_Safe_Ground", safe_ground_precision, epoch)
+			writer.add_scalar("Metrics_safetySafety/Recall_Any_Obstacle", any_obstacle_recall, epoch)
+			writer.add_scalar("Metrics_performance/Latency_ms_per_image", avg_latency_ms, epoch)
+			writer.add_scalar("Metrics_performance/FPS", fps, epoch)
 
 			writer.add_image("Visual/1_Image", visual_images[0], epoch)
 			writer.add_image("Visual/2_True_Mask", paint_segmap(visual_masks[0]), epoch)
@@ -357,6 +429,21 @@ def train_model():
 					'best_val_iou': best_val_iou,
 				}, os.path.join(run_dir, "best_model.pth"))
 				print(f"\n[SAVE] Обновлена лучшая модель на эпохе {epoch+1}")
+
+		epoch_metrics = {
+			"epoch": epoch + 1,
+			"train_loss": round(avg_loss, 4),
+			"val_loss": round(avg_val_loss, 4),
+			"mIoU": round(mIoU, 4),
+			"safe_ground_iou": round(mean_ious[0], 4),
+			"safe_ground_precision": round(safe_ground_precision, 4),
+			"any_obstacle_recall": round(any_obstacle_recall, 4),
+			"latency_ms": round(avg_latency_ms, 2),
+			"fps": round(fps, 2)
+		}
+		metrics_data["history"].append(epoch_metrics)
+		with open(metrics_file, "w", encoding="utf-8") as f:
+			json.dump(metrics_data, f, indent=4, ensure_ascii=False)
 
 		print(f"Epoch[{epoch+1}/{config_train.EPOCHS}] | Train Loss: {avg_loss:.4f} | Val Loss: {avg_val_loss:.4f} | mIoU: {mIoU:.4f} | SafeGround_IoU: {mean_ious[0]:.4f} | Any_Obstacle_IoU: {mean_ious['any_obstacle']:.4f}")
 

@@ -1,0 +1,9 @@
+﻿path: yolo_train_data
+train: images/train
+val: images/val
+
+names:
+  0: Safe_Ground
+  1: Static_Obstacle
+  2: Vegetation
+  3: Dynamic_Obstacle

@@ -44,4 +44,14 @@ SEARCH_GRIDS = [
         "AUG_STRATEGY": ["medium"],
         "EXTRA_KWARGS": [json.dumps({})]
     },
+	{
+        "SEG_MODEL_NAME":["yolo11n-seg.pt", "yolo11s-seg.pt"], 
+        "SEG_BACKBONE": ["none"], # У YOLO встроенный бэкбон
+        "BATCH_SIZE": [16, 32],                        
+        "LEARNING_RATE": [1e-3, 3e-4],
+        "OPTIMIZER": ["AdamW", "auto"],
+        "EPOCHS": [30],
+        "AUG_STRATEGY": ["light", "medium"],
+        "EXTRA_KWARGS": [json.dumps({})]
+    }
 ]

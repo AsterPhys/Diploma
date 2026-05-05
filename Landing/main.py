@@ -1,4 +1,4 @@
-import argparse
+﻿import argparse
 import config
 
 def main():
@@ -13,9 +13,16 @@ def main():
 		collector.collect_data(config.DATASET_SIZE)
 		
 	elif args.mode == 'train':
-		from train import train_model
 		print("[MAIN] Запуск обучения нейросети...")
-		train_model()
+		import os
+		model_name = os.environ.get("SEG_MODEL_NAME", "").lower()
+		from train import train_model
+		if "yolo" in model_name:
+			import train_yolo
+			train_yolo.main()
+		else:
+			from train import train_model
+			train_model()
 
 if __name__ == "__main__":
 	main()

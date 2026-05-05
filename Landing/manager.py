@@ -1,4 +1,4 @@
-import os
+﻿import os
 import subprocess
 import time
 import sys
@@ -102,13 +102,22 @@ def main():
 		# Запуск очереди экспериментов
 		for idx, exp in enumerate(experiments, 1):
 			kwargs_dict = json.loads(exp.get("EXTRA_KWARGS", "{}"))
-			kwargs_str = "_" + "_".join([f"{k}-{v}" for k, v in kwargs_dict.items()]) if kwargs_dict else ""
+			clean_kwargs = {k: str(v).replace('"', '').replace(' ', '') for k, v in kwargs_dict.items()}
+			kwargs_str = "_" + "_".join([f"{k}-{v}" for k, v in clean_kwargs.items()]) if clean_kwargs else ""
 			
 			aug_str = f"_AUG-{exp.get('AUG_STRATEGY', 'medium')}"
-			exp_name = f"{exp['SEG_MODEL_NAME']}_{exp['SEG_BACKBONE']}_BS{exp['BATCH_SIZE']}_{exp['OPTIMIZER']}_LR{exp['LEARNING_RATE']}{aug_str}{kwargs_str}"
+			
+			clean_model_name = exp['SEG_MODEL_NAME'].replace('.pt', '')
+			exp_name = f"{clean_model_name}_{exp['SEG_BACKBONE']}_BS{exp['BATCH_SIZE']}_{exp['OPTIMIZER']}_LR{exp['LEARNING_RATE']}{aug_str}{kwargs_str}"
 			
 			run_name = f"{session_name}/{exp_name}"
+			run_dir = os.path.join(config.MODELS_DIR, session_name, exp_name)
 			
+			# Пропускаем эксперимент, если лучшая модель уже сохранена
+			if args.resume_run and os.path.exists(os.path.join(run_dir, "best_model.pth")):
+				print(f"[SEARCH] Эксперимент {idx}/{len(experiments)} ({exp_name}) уже завершен. Пропуск.")
+				continue
+
 			print(f"\n{'='*70}")
 			print(f"[SEARCH] ЗАПУСК ЭКСПЕРИМЕНТА {idx}/{len(experiments)}")
 			print(f"Модель: {exp_name}")
@@ -121,17 +130,23 @@ def main():
 			for k, v in exp.items():
 				env_vars[k] = str(v)
 				
-			process = subprocess.Popen(
-				[sys.executable, "main.py", "--mode", "train"],
-				cwd=BASE_DIR,
-				env=env_vars
-			)
-			process.wait()
+			try:
+				process = subprocess.Popen(
+					[sys.executable, "main.py", "--mode", "train"],
+					cwd=BASE_DIR,
+					env=env_vars
+				)
+				process.wait()
 			
-			if process.returncode != 0:
-				print(f"[MANAGER] Эксперимент '{exp_name}' упал с ошибкой! Пропускаем и идем дальше...")
-				time.sleep(3)
-				
+				if process.returncode != 0:
+					print(f"[MANAGER] Эксперимент '{exp_name}' упал с ошибкой! Пропускаем и идем дальше...")
+					time.sleep(3)
+			except KeyboardInterrupt:
+				print("\n[MANAGER] Получен сигнал прерывания (Ctrl+C). Принудительно убиваем процесс обучения...")
+				process.terminate()
+				process.wait()
+				sys.exit(1)
+
 		print("\n[MANAGER] ВСЕ ЭКСПЕРИМЕНТЫ ИЗ СЕТКИ ЗАВЕРШЕНЫ!")
 		return
 

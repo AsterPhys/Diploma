@@ -273,6 +273,7 @@ def train_model():
 		model.load_state_dict(checkpoint['model_state_dict'])
 		optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 		start_epoch = checkpoint['epoch']
+		best_val_iou = checkpoint.get('best_val_iou', 0.0)
 
 		# --- Подгружаем историю метрик ---
 		if os.path.exists(metrics_file):
@@ -328,10 +329,6 @@ def train_model():
 		# немного чище
 		visual_images, visual_masks, visual_preds = None, None, None
 
-		# Переменные для замера производительности (FPS / Latency)
-		total_time_ms = 0.0
-		total_frames = 0
-
 		with torch.no_grad():
 			pbar = tqdm(val_loader, desc=f"Validation {epoch+1}/{config_train.EPOCHS}")
 			for batch_idx, (val_images, val_masks) in enumerate(pbar):
@@ -344,11 +341,6 @@ def train_model():
 
 				start_event.record()
 				val_outputs = model(val_images)
-				end_event.record()
-
-				torch.cuda.synchronize()
-				total_time_ms += start_event.elapsed_time(end_event)
-				total_frames += val_images.size(0)
 
 				loss = criterion(val_outputs, val_masks)
 				val_loss += loss.item()
@@ -389,10 +381,6 @@ def train_model():
 			fn_obs = total_metrics["any_obstacle"]["fn"]
 			any_obstacle_recall = tp_obs / (tp_obs + fn_obs) if (tp_obs + fn_obs) > 0 else 0.0
 
-			# Производительность (Latency & FPS)
-			avg_latency_ms = total_time_ms / total_frames if total_frames > 0 else 0.0
-			fps = 1000.0 / avg_latency_ms if avg_latency_ms > 0 else 0.0
-
 			writer.add_scalar("Loss/Validation", avg_val_loss, epoch)
 			writer.add_scalar("Metrics_IoU/mIoU_All_Classes", mIoU, epoch)
 			writer.add_scalar("Metrics_IoU/Safe_Ground", mean_ious[0], epoch)
@@ -403,9 +391,7 @@ def train_model():
 
 			writer.add_scalar("Metrics_safety/Precision_Safe_Ground", safe_ground_precision, epoch)
 			writer.add_scalar("Metrics_safetySafety/Recall_Any_Obstacle", any_obstacle_recall, epoch)
-			writer.add_scalar("Metrics_performance/Latency_ms_per_image", avg_latency_ms, epoch)
-			writer.add_scalar("Metrics_performance/FPS", fps, epoch)
-
+			
 			writer.add_image("Visual/1_Image", visual_images[0], epoch)
 			writer.add_image("Visual/2_True_Mask", paint_segmap(visual_masks[0]), epoch)
 			writer.add_image("Visual/3_Pred_Mask", paint_segmap(visual_preds[0]), epoch)
@@ -437,9 +423,7 @@ def train_model():
 			"mIoU": round(mIoU, 4),
 			"safe_ground_iou": round(mean_ious[0], 4),
 			"safe_ground_precision": round(safe_ground_precision, 4),
-			"any_obstacle_recall": round(any_obstacle_recall, 4),
-			"latency_ms": round(avg_latency_ms, 2),
-			"fps": round(fps, 2)
+			"any_obstacle_recall": round(any_obstacle_recall, 4)
 		}
 		metrics_data["history"].append(epoch_metrics)
 		with open(metrics_file, "w", encoding="utf-8") as f:

@@ -1,4 +1,6 @@
 ﻿import os
+import config
+import torch
 
 os.environ['HSA_OVERRIDE_GFX_VERSION'] = '11.0.0'
 os.environ['MIOPEN_FIND_MODE'] = '1'
@@ -8,37 +10,63 @@ os.environ['MIOPEN_CUSTOM_CACHE_DIR'] = 'D:\\Cache\\Temp'
 
 from ultralytics import YOLO
 
-def main():
-    print("[YOLO] Загрузка архитектуры YOLO11n-seg...")
-    model = YOLO("yolo11n-seg.pt")
+# Пресеты аугментаций
+AUG_STRATEGIES = {
+	"light": {
+		"hsv_h": 0.015, "hsv_s": 0.5, "hsv_v": 0.4,
+		"degrees": 0.0, "translate": 0.1, "scale": 0.1,
+		"flipud": 0.0, "fliplr": 0.5, "mosaic": 0.0, "erasing": 0.0
+	},
+	"medium": {
+		"hsv_h": 0.015, "hsv_s": 0.5, "hsv_v": 0.4,
+		"degrees": 15.0, "translate": 0.1, "scale": 0.3,
+		"flipud": 0.5, "fliplr": 0.5, "mosaic": 1.0, "erasing": 0.2
+	},
+	"heavy": {
+		"hsv_h": 0.02, "hsv_s": 0.7, "hsv_v": 0.5,
+		"degrees": 30.0, "translate": 0.2, "scale": 0.5,
+		"flipud": 0.5, "fliplr": 0.5, "mosaic": 1.0, "erasing": 0.4, "mixup": 0.1
+	}
+}
 
-    print("[YOLO] Старт обучения...")
-    results = model.train(
-        data="drone_yolo.yaml",
-        epochs=50,
-        imgsz=640,
-        batch=16,
-        device="0",
-        project="runs/yolo",
-        name="yolo11n_drone_run",
-        
-        # --- АУГМЕНТАЦИИ ---
-        hsv_h=0.015,        # Цветовой джиттер (Hue)
-        hsv_s=0.5,          # Насыщенность (Saturation)
-        hsv_v=0.4,          # Яркость (Value)
-        degrees=15.0,       # Повороты дрона
-        translate=0.1,      # Сдвиги камеры
-        scale=0.3,          # Зум
-        flipud=0.5,         # Отражение по вертикали 50%
-        fliplr=0.5,         # Отражение по горизонтали 50%
-        mosaic=1.0,         # Мозаика (склейка 4 фото в 1)
-        erasing=0.2,        # Random Erasing
-        
-        optimizer="AdamW",
-        lr0=1e-3
-    )
-    
-    print("[YOLO] Обучение завершено.")
+def main():
+	model_name = os.environ.get("SEG_MODEL_NAME", "yolo11n-seg.pt")
+	lr = float(os.environ.get("LEARNING_RATE", 1e-3))
+	batch_size = int(os.environ.get("BATCH_SIZE", 16))
+	epochs = int(os.environ.get("EPOCHS", 50))
+	optimizer = os.environ.get("OPTIMIZER", "auto")
+	run_name = os.environ.get("RUN_NAME", "yolo_manual_run")
+
+	project_dir = "runs/segmentation"
+
+	selected_aug = os.environ.get("AUG_STRATEGY", "medium")
+	aug_kwargs = AUG_STRATEGIES.get(selected_aug, AUG_STRATEGIES["medium"])
+
+	print(f"\n{'='*50}")
+	print("[YOLO] Загрузка архитектуры YOLO11n-seg...")
+	print(f"Модель: {model_name} | LR: {lr} | BS: {batch_size} | Aug: {selected_aug}")
+	print(f"{'='*50}\n")
+	
+	model = YOLO(model_name)
+
+	device_id = "0" if torch.cuda.is_available() else "cpu"
+
+	print("[YOLO] Старт обучения...")
+	results = model.train(
+		data="drone_yolo.yaml",
+        epochs=epochs,
+        imgsz=[config.IMAGE_HEIGHT, config.IMAGE_WIDTH],
+		rect=True,
+        batch=batch_size,
+        device=device_id,
+        project=project_dir,
+        name=run_name,
+        optimizer=optimizer,
+        lr0=lr,
+		**aug_kwargs
+	)
+	
+	print("[YOLO] Обучение {run_name} успешно завершено.")
 
 if __name__ == "__main__":
-    main()
+	main()

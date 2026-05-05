@@ -1,5 +1,4 @@
-﻿```markdown
-# Модуль RL_agent
+﻿# Модуль RL_agent
 ## 1. Назначение модуля
 `RL_agent` реализует обучение агента автономной навигации в AirSim на основе многомодального наблюдения:
 - стек depth-кадров (пространственно-временной контекст),
@@ -21,7 +20,7 @@
 - строит мультимодальный extractor:
   - CNN-ветка для depth,
   - MLP-ветка для вектора,
-  - fusion в общий embedding;
+  - Слияние в общий эмбеддинг;
 - инициализирует PPO/SAC с параметрами из `config.py`;
 - поддерживает resume:
   - `latest_model.zip`,
@@ -45,50 +44,72 @@
     - прогресс к цели,
     - шаговый штраф,
     - бонус за успех,
-    - сильный штраф за collision;
+    - сильный штраф за коллизию;
   - завершает эпизод по успеху/столкновению/таймауту маршрута.
 ## 3. Curriculum Learning: логика смены уровней
 Curriculum реализован в `CurriculumCallback`:
 - ведутся буферы успешности по каждому маршруту (`deque` фиксированной длины);
 - через заданный интервал шагов проверяются условия:
-  1. **unlock route по quality**: если winrate по всем открытым маршрутам >= порога;
-  2. **unlock route по timeout**: если слишком долго нет прогресса;
-  3. **level up по mastery**: если все маршруты уровня освоены;
-  4. **level up по timeout**: если превышен лимит шагов уровня.
+  1) **разблокирование route по quality**: если winrate по всем открытым маршрутам >= порога;
+  2) **разблокирование route по timeout**: если слишком долго нет прогресса;
+  3) **level up по mastery**: если все маршруты уровня освоены;
+  4) **level up по timeout**: если превышен лимит шагов уровня.
 - при смене уровня вызывается `env.set_level(new_lvl)` и процесс завершает текущий запуск кодом `42`, чтобы `manager.py` перезапустил UE на новой карте.
 Таким образом, переходы между уровнями синхронизированы с инфраструктурой симулятора и не завязаны на «горячую» замену карты внутри одного процесса.
 ## 4. Диаграмма жизненного цикла среды
 ```mermaid
 flowchart TD
-    A[reset()] --> B[Выбор маршрута из unlocked пулa]
-    B --> C[Телепорт в старт + прогрев камеры]
-    C --> D[Формирование obs: depth_stack + vector]
-    D --> E[step(action)]
-    E --> F[Body->World transform + move]
-    F --> G[Новое obs + reward]
-    G --> H{Терминальные условия}
-    H -- успех --> I[terminated=True, bonus]
-    H -- collision --> J[terminated=True, penalty]
-    H -- timeout --> K[truncated=True]
-    H -- иначе --> E
+A["reset()"] --> B["Выбор маршрута из разблокированного пула"]
+B --> C["Телепорт в старт + прогрев камеры"]
+C --> D["Формирование obs: depth_stack + vector"]
+D --> E["step(action)"]
+E --> F["Body ➔ World transform + move"]
+F --> G["Новое obs + reward"]
+G --> H{"Терминальные условия"}
+H -->|Success| I["terminated=True + bonus"]
+H -->|Collision| J["terminated=True + penalty"]
+H -->|Timeout| K["truncated=True"]
+H -->|Иначе| E
+
+style H fill:#333,stroke:#8B9BB4,color:#fff
+style I fill:#2e7d32,stroke:#fff,color:#fff
+style J fill:#c62828,stroke:#fff,color:#fff
 ```
 
 ## 5. Диаграмма переходов по уровням (Curriculum)
 
-```stateDiagram-v2
-    [*] --> LevelN: старт/восстановление state
+```mermaid
+flowchart TD
+Start(( )) --> Init["Старт / Загрузка state"]
+subgraph LevelN ["Процесс на Уровне N"]
+    direction TB
+    Train["Обучение на открытых маршрутах<br/>(Сбор статистики winrate)"]
+    
+    CheckUnlock{"Условие разблокирования?"}
+    Unlock["Разблокировка маршрута<br/>+ Сброс буферов"]
+    
+    Train --> CheckUnlock
+    CheckUnlock -->|Winrate высокий или таймаут| Разблокирование
+    Unlock --> Train
+    CheckUnlock ---->|Нет| Train
+end
 
-    state LevelN {
-        [*] --> TrainRoutes
-        TrainRoutes --> TrainRoutes: сбор статистики winrate
-        TrainRoutes --> UnlockRoute: winrate >= threshold\nдля всех открытых
-        TrainRoutes --> UnlockRoute: timeout unlock
-        UnlockRoute --> TrainRoutes: opened next route
-    }
+Init --> LevelN
 
-    LevelN --> LevelNplus1: all routes passed
-    LevelN --> LevelNplus1: max steps per level exceeded
-    LevelNplus1 --> [*]: exit code 42 -> manager restart UE
+LevelN --> Upgrade{"Смена локации?"}
+
+Upgrade -->|Все маршруты пройдены или Лимит шагов| NextL([Уровень N + 1])
+Upgrade ---->|Нет| LevelN
+
+NextL --> Exit["Выход с кодом 42"]
+Exit --> Manager["Manager: Перезапуск UE на новой карте"]
+Manager --> End(( ))
+
+style LevelN fill:#1e2227,stroke:#8B9BB4,color:#fff,stroke-dasharray: 5 5
+style CheckUnlock fill:#333,stroke:#8B9BB4,color:#fff
+style Upgrade fill:#333,stroke:#8B9BB4,color:#fff
+style NextL fill:#2e7d32,stroke:#fff,color:#fff
+style Init fill:#455a64,stroke:#fff,color:#fff
 ```
 
 ## 6. Архитектурный вывод

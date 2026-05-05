@@ -12,21 +12,36 @@ from ultralytics import YOLO
 
 # Пресеты аугментаций
 AUG_STRATEGIES = {
-	"light": {
-		"hsv_h": 0.015, "hsv_s": 0.5, "hsv_v": 0.4,
-		"degrees": 0.0, "translate": 0.1, "scale": 0.1,
-		"flipud": 0.0, "fliplr": 0.5, "mosaic": 0.0, "erasing": 0.0
-	},
-	"medium": {
-		"hsv_h": 0.015, "hsv_s": 0.5, "hsv_v": 0.4,
-		"degrees": 15.0, "translate": 0.1, "scale": 0.3,
-		"flipud": 0.5, "fliplr": 0.5, "mosaic": 1.0, "erasing": 0.2
-	},
-	"heavy": {
-		"hsv_h": 0.02, "hsv_s": 0.7, "hsv_v": 0.5,
-		"degrees": 30.0, "translate": 0.2, "scale": 0.5,
-		"flipud": 0.5, "fliplr": 0.5, "mosaic": 1.0, "erasing": 0.4, "mixup": 0.1
-	}
+    # Без искажений
+    "none": {
+        "hsv_h": 0.0, "hsv_s": 0.0, "hsv_v": 0.0,
+        "degrees": 0.0, "translate": 0.0, "scale": 0.0,
+        "flipud": 0.0, "fliplr": 0.0, "mosaic": 0.0, "erasing": 0.0, "mixup": 0.0
+    },
+
+    # Геометрия
+    "spatial": {
+        "hsv_h": 0.0, "hsv_s": 0.0, "hsv_v": 0.0,
+        "degrees": 45.0, "translate": 0.1, "scale": 0.15,
+        "flipud": 0.5, "fliplr": 0.5, "mosaic": 0.0, "erasing": 0.0, "mixup": 0.0
+    },
+
+    # Геометрия + свет
+    "lighting": {
+        "hsv_h": 0.015, "hsv_s": 0.4, "hsv_v": 0.4,
+        "degrees": 45.0, "translate": 0.1, "scale": 0.15,
+        "flipud": 0.5, "fliplr": 0.5, "mosaic": 0.0, "erasing": 0.0, "mixup": 0.0
+    },
+
+    # Специфичные методы YOLO
+    "yolo_advanced": {
+        "hsv_h": 0.015, "hsv_s": 0.4, "hsv_v": 0.4,
+        "degrees": 45.0, "translate": 0.1, "scale": 0.15,
+        "flipud": 0.5, "fliplr": 0.5,
+        "mosaic": 1.0,    # Склеивает 4 кадра в 1
+        "erasing": 0.4,   # Случайно замазывает куски кадра (имитация преград/облаков)
+        "mixup": 0.1      # Смешивает 2 кадра полупрозрачно (снижает уверенность сети)
+    }
 }
 
 def main():

@@ -1,7 +1,8 @@
-import os
+﻿import os
 import json
 import numpy as np
 import albumentations as A
+import cv2
 from config import BASE_DIR, IMAGE_WIDTH, IMAGE_HEIGHT
 
 MODELS_DIR = os.path.join(BASE_DIR, 'runs', 'segmentation')
@@ -36,50 +37,76 @@ COLOR_MAP = np.array([
 
 # --- АУГМЕНТАЦИИ ---
 # Получаем стратегию из окружения
-SELECTED_AUG = os.environ.get("AUG_STRATEGY", "medium")
+SELECTED_AUG = os.environ.get("AUG_STRATEGY", "spatial")
 
-# Пресеты аугментаций
+# Пресеты аугментаций (кумулятивный подход)
 AUG_STRATEGIES = {
+	# Только нормализация
     "none": A.Compose([
-        A.CenterCrop(height=480, width=640, p=1.0), # Просто кроп без искажений
         A.Normalize(),
         A.pytorch.ToTensorV2()
     ]),
-    "light": A.Compose([
-        A.RandomCrop(height=480, width=640, p=1.0),
+
+	# Геометрические
+	"spatial": A.Compose([
+        A.HorizontalFlip(p=0.5),
+        A.VerticalFlip(p=0.5),
+        A.Affine(
+            scale=(0.85, 1.15), 
+            translate_percent=(-0.1, 0.1), 
+            rotate=(-45, 45), 
+            border_mode=cv2.BORDER_REFLECT_101, 
+            p=0.5
+        ),
         
-		A.HorizontalFlip(p=0.5),
-        A.ColorJitter(brightness=0.1, contrast=0.1, p=0.5),
-        
-		A.Normalize(),
+        A.Normalize(),
         A.pytorch.ToTensorV2()
     ]),
-    "medium": A.Compose([
-        A.RandomCrop(height=480, width=640, p=1.0),
-        
-		A.HorizontalFlip(p=0.5),
+
+	# Геометрия + свет
+	"lighting": A.Compose([
+        A.HorizontalFlip(p=0.5),
         A.VerticalFlip(p=0.5),
-        A.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.05, p=0.5),
-        A.GaussianBlur(blur_limit=(3, 5), p=0.2),
+        A.Affine(
+            scale=(0.85, 1.15), 
+            translate_percent=(-0.1, 0.1), 
+            rotate=(-45, 45), 
+            border_mode=cv2.BORDER_REFLECT_101, 
+            p=0.5
+        ),
         
-		A.Normalize(),
+        A.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.1, p=0.6),
+        A.RandomGamma(gamma_limit=(80, 120), p=0.4),
+        
+        A.Normalize(),
         A.pytorch.ToTensorV2()
     ]),
-    "heavy": A.Compose([
-        A.RandomCrop(height=480, width=640, p=1.0),
-        
-		A.HorizontalFlip(p=0.5),
+
+	# Геометрия + свет + деградация камеры
+	"sensor": A.Compose([
+        A.HorizontalFlip(p=0.5),
         A.VerticalFlip(p=0.5),
-        A.RandomRotate90(p=0.5),
-        A.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, p=0.7),
-        A.GaussNoise(var_limit=(10.0, 50.0), p=0.3),
+        A.Affine(
+            scale=(0.85, 1.15), 
+            translate_percent=(-0.1, 0.1), 
+            rotate=(-45, 45), 
+            border_mode=cv2.BORDER_REFLECT_101, 
+            p=0.5
+        ),
         
-		A.Normalize(),
+        A.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.1, p=0.6),
+        A.RandomGamma(gamma_limit=(80, 120), p=0.4),
+        
+        A.MotionBlur(blur_limit=7, p=0.3),
+        A.GaussNoise(std_range=(5.0, 15.0), p=0.4),
+        A.ImageCompression(quality_range=(60, 100), p=0.3),
+        
+        A.Normalize(),
         A.pytorch.ToTensorV2()
     ])
 }
 
-TRAIN_TRANSFORMS = AUG_STRATEGIES.get(SELECTED_AUG, AUG_STRATEGIES["medium"])
+TRAIN_TRANSFORMS = AUG_STRATEGIES.get(SELECTED_AUG, AUG_STRATEGIES["spatial"])
 
 VAL_TRANSFORMS = A.Compose([
 	A.CenterCrop(height=480, width=640, p=1.0),

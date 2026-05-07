@@ -113,8 +113,11 @@ def main():
 			run_name = f"{session_name}/{exp_name}"
 			run_dir = os.path.join(config.MODELS_DIR, session_name, exp_name)
 			
+			is_smp_done = os.path.exists(os.path.join(run_dir, "best_model.pth"))
+			is_yolo_done = os.path.exists(os.path.join(run_dir, "weights", "best.pt"))
+
 			# Пропускаем эксперимент, если лучшая модель уже сохранена
-			if args.resume_run and os.path.exists(os.path.join(run_dir, "best_model.pth")):
+			if args.resume_run and (is_smp_done or is_yolo_done):
 				print(f"[SEARCH] Эксперимент {idx}/{len(experiments)} ({exp_name}) уже завершен. Пропуск.")
 				continue
 

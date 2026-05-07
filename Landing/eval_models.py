@@ -131,6 +131,7 @@ def evaluate_model(model, model_info, dataset, device):
 	total_metrics = {k: {"intersection": 0, "union": 0, "tp": 0, "fp": 0, "fn": 0} for k in keys}
 	
 	eval_transform = A.Compose([
+		A.CenterCrop(height=480, width=640, p=1.0),
 		A.Normalize(),
 		ToTensorV2()
 	])

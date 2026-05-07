@@ -24,7 +24,7 @@ SEARCH_GRIDS = [
     # ==========================================
     {
         "SEG_MODEL_NAME": ["Unet"],
-        "SEG_BACKBONE": ["mobilenet_v3_small", "efficientnet-b0", "resnet18"],
+        "SEG_BACKBONE": ["mobilenet_v2", "efficientnet-b0", "resnet18"],
         "BATCH_SIZE": [16],                        
         "LEARNING_RATE": [3e-4],
         "OPTIMIZER": ["AdamW"],

@@ -50,12 +50,18 @@ def main():
 	batch_size = int(os.environ.get("BATCH_SIZE", 16))
 	epochs = int(os.environ.get("EPOCHS", 50))
 	optimizer = os.environ.get("OPTIMIZER", "auto")
+
 	run_name = os.environ.get("RUN_NAME", "yolo_manual_run")
+	selected_aug = os.environ.get("AUG_STRATEGY", "spatial")
+	aug_kwargs = AUG_STRATEGIES.get(selected_aug, AUG_STRATEGIES["spatial"])
 
-	project_dir = "runs/segmentation"
-
-	selected_aug = os.environ.get("AUG_STRATEGY", "medium")
-	aug_kwargs = AUG_STRATEGIES.get(selected_aug, AUG_STRATEGIES["medium"])
+	if "/" in run_name:
+		session_name, exp_name = run_name.split("/", 1)
+		abs_project_dir = os.path.join(config.MODELS_DIR, session_name)
+	else:
+		abs_project_dir = config.MODELS_DIR
+		exp_name = run_name
+	abs_data_yaml = os.path.join(config.BASE_DIR, "drone_yolo.yaml")
 
 	print(f"\n{'='*50}")
 	print("[YOLO] Загрузка архитектуры YOLO11n-seg...")
@@ -68,14 +74,14 @@ def main():
 
 	print("[YOLO] Старт обучения...")
 	results = model.train(
-		data="drone_yolo.yaml",
+		data=abs_data_yaml,
         epochs=epochs,
         imgsz=[config.IMAGE_HEIGHT, config.IMAGE_WIDTH],
 		rect=True,
         batch=batch_size,
         device=device_id,
-        project=project_dir,
-        name=run_name,
+        project=abs_project_dir,
+        name=exp_name,
         optimizer=optimizer,
         lr0=lr,
 		**aug_kwargs

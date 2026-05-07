@@ -43,12 +43,15 @@ SELECTED_AUG = os.environ.get("AUG_STRATEGY", "spatial")
 AUG_STRATEGIES = {
 	# Только нормализация
     "none": A.Compose([
+		A.CenterCrop(height=480, width=640, p=1.0),
         A.Normalize(),
         A.pytorch.ToTensorV2()
     ]),
 
 	# Геометрические
 	"spatial": A.Compose([
+		A.CenterCrop(height=480, width=640, p=1.0),
+
         A.HorizontalFlip(p=0.5),
         A.VerticalFlip(p=0.5),
         A.Affine(
@@ -65,6 +68,8 @@ AUG_STRATEGIES = {
 
 	# Геометрия + свет
 	"lighting": A.Compose([
+		A.CenterCrop(height=480, width=640, p=1.0),
+
         A.HorizontalFlip(p=0.5),
         A.VerticalFlip(p=0.5),
         A.Affine(
@@ -84,6 +89,8 @@ AUG_STRATEGIES = {
 
 	# Геометрия + свет + деградация камеры
 	"sensor": A.Compose([
+		A.CenterCrop(height=480, width=640, p=1.0),
+
         A.HorizontalFlip(p=0.5),
         A.VerticalFlip(p=0.5),
         A.Affine(
@@ -98,7 +105,7 @@ AUG_STRATEGIES = {
         A.RandomGamma(gamma_limit=(80, 120), p=0.4),
         
         A.MotionBlur(blur_limit=7, p=0.3),
-        A.GaussNoise(std_range=(5.0, 15.0), p=0.4),
+        A.GaussNoise(std_range=(0.02, 0.1), p=0.4),
         A.ImageCompression(quality_range=(60, 100), p=0.3),
         
         A.Normalize(),

@@ -390,3 +390,7 @@ RL_agent/ppo_drone_tensorboard/
 /Diploma.sln
 /Landing/yolo_train_data
 /Landing/yolo_vis
+/runs/segment/runs/segmentation/Search_Session_06_05_2026_01_44_08
+/Landing/yolo11n-seg.pt
+/Landing/yolo11s-seg.pt
+/Landing/yolo26n.pt

@@ -63,8 +63,8 @@ A["reset()"] --> B["Выбор маршрута из разблокирован�
 B --> C["Телепорт в старт + прогрев камеры"]
 C --> D["Формирование obs: depth_stack + vector"]
 D --> E["step(action)"]
-E --> F["Body ➔ World transform + move"]
-F --> G["Новое obs + reward"]
+E --> F["Преобразование координат (Body → World) и выполнение действия"]
+F --> G["Получение нового наблюдения и вознаграждения"]
 G --> H{"Терминальные условия"}
 H -->|Success| I["terminated=True + bonus"]
 H -->|Collision| J["terminated=True + penalty"]
@@ -102,7 +102,7 @@ Upgrade -->|Все маршруты пройдены или Лимит шаго�
 Upgrade ---->|Нет| LevelN
 
 NextL --> Exit["Выход с кодом 42"]
-Exit --> Manager["Manager: Перезапуск UE на новой карте"]
+Exit --> Manager["Перезапуск среды моделирования на новой сцене"]
 Manager --> End(( ))
 
 style LevelN fill:#1e2227,stroke:#8B9BB4,color:#fff,stroke-dasharray: 5 5

@@ -38,21 +38,21 @@
 
 ```mermaid
 flowchart LR
-    UE[Unreal Engine + AirSim]
-    SM[settings_manager.py<br/>режимные пресеты AirSim]
+    UE[Симулятор: Unreal Engine + AirSim]
+    SM[Менеджер конфигурации<br/>settings_manager.py]
 
-    subgraph OFFLINE["Офлайн-контур обучения"]
-        L[Landing<br/>collector/train/search]
-        R[RL_agent<br/>env/train/curriculum]
-        Lw[(Segmentation Weights + config)]
-        Rw[(RL Weights + run_config/state)]
+    subgraph OFFLINE["Подсистема подготовки и обучения моделей"]
+        L[Модуль компьютерного зрения<br/>Сбор данных и обучение]
+        R[Модуль навигации<br/>Обучение RL-агента]
+        Lw[(Весовые коэффициенты<br/>и конфигурация сегментации)]
+        Rw[(Весовые коэффициенты<br/>и состояние RL-агента)]
         L --> Lw
         R --> Rw
     end
 
-    subgraph ONLINE["Боевой контур"]
-        P[Pipeline state_machine.py]
-        VS[Vision FastAPI Server]
+    subgraph ONLINE["Эксплуатационный контур (Инференс)"]
+        P[Конечный автомат управления<br/>state_machine.py]
+        VS[Сервер компьютерного зрения<br/>FastAPI]
     end
 
     SM --> UE

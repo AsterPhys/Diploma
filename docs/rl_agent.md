@@ -112,6 +112,66 @@ style NextL fill:#2e7d32,stroke:#fff,color:#fff
 style Init fill:#455a64,stroke:#fff,color:#fff
 ```
 
-## 6. Архитектурный вывод
+## 6. Архитектура нейронной сети
+
+```mermaid
+flowchart LR
+    subgraph Input ["Входные данные"]
+        direction TB
+        D["Карты глубины<br/>(Тензор 4 × 84 × 84)"]
+        V["Кинематический вектор<br/>(Вектор 4 × 1)"]
+    end
+
+    subgraph Extractor ["Мультимодальный экстрактор признаков"]
+        subgraph CNN["Сверточная ветвь (CNN)"]
+            direction TB
+            C1["Conv2d: 32 фильтра, 8×8, s=4<br/>+ ReLU"]
+            C2["Conv2d: 64 фильтра, 4×4, s=2<br/>+ ReLU"]
+            C3["Conv2d: 64 фильтра, 3×3, s=1<br/>+ ReLU"]
+            F["Flatten (Выравнивание)"]
+            C1 --> C2 --> C3 --> F
+        end
+
+        subgraph MLP ["Многослойный персептрон (MLP)"]
+            direction TB
+            M1["Linear: 64 нейрона<br/>+ ReLU"]
+            M2["Linear: 64 нейрона<br/>+ ReLU"]
+            M1 --> M2
+        end
+
+        Merge{"Конкатенация<br/>признаков"}
+        OutFC["Полносвязный слой<br/>320 нейронов + ReLU"]
+    end
+
+    subgraph Heads ["Архитектура Actor-Critic"]
+        direction TB
+        Actor["Сеть Actor (Политика)<br/>2 слоя по 128 нейронов"]
+        Critic["Сеть Critic (Функция ценности)<br/>2 слоя по 128 нейронов"]
+        ActOut["Действие: a =[v_x, v_y, v_z]"]
+        CritOut["Оценка состояния: V(s)"]
+    end
+
+    D --> C1
+    V --> M1
+    
+    F --> Merge
+    M2 --> Merge
+    Merge --> OutFC
+
+    OutFC --> Actor
+    OutFC --> Critic
+
+    Actor --> ActOut
+    Critic --> CritOut
+    
+    style Input fill:#2c3e50,stroke:#8B9BB4,color:#fff
+    style CNN fill:#34495e,stroke:#8B9BB4,color:#fff
+    style MLP fill:#34495e,stroke:#8B9BB4,color:#fff
+    style Heads fill:#34495e,stroke:#8B9BB4,color:#fff
+    style Merge fill:#006064,stroke:#fff,color:#fff
+    style OutFC fill:#00838f,stroke:#fff,color:#fff
+```
+
+## 7. Архитектурный вывод
 
 `RL_agent` сочетает алгоритмический контур RL и инфраструктурный контур управления симулятором. Благодаря этому обучение устойчиво к зависаниям и масштабируется по сложности среды через формализованный curriculum-механизм.

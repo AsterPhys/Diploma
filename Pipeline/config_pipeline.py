@@ -1,12 +1,12 @@
-import os
+﻿import os
 from dotenv import load_dotenv
 
 DEBUG = True
 
 # --- ПАРАМЕТРЫ ИСПОЛЬЗУЕМЫХ МОДЕЛЕЙ --- 
 RL_MODEL_NAME = "PPO_drone_29_04_2026_08_17_19"
-SEG_MODEL_NAME = "UNet_resnet34_28_04_2026_23_21_55"
-SEG_MODEL_EPOCH = 1
+SEG_MODEL_NAME = "Search_Session_12_05_2026_09_33_19\Unet_efficientnet-b0_BS16_AdamW_LR0.0003_AUG-spatial"
+SEG_MODEL_EPOCH = 49
 
 # --- ПУТИ ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))

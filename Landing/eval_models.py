@@ -1,4 +1,11 @@
 ﻿import os
+
+os.environ['HSA_OVERRIDE_GFX_VERSION'] = '11.0.0'
+os.environ['MIOPEN_FIND_MODE'] = '1'
+os.environ['MIOPEN_DEBUG_DISABLE_FIND_DB'] = '1'
+os.environ['MIOPEN_USER_DB_PATH'] = 'D:\\Cache\\Temp'
+os.environ['MIOPEN_CUSTOM_CACHE_DIR'] = 'D:\\Cache\\Temp'
+
 import cv2
 import json
 import torch
@@ -9,6 +16,7 @@ from matplotlib.lines import Line2D
 import argparse
 from tqdm import tqdm
 from thop import profile
+from adjustText import adjust_text
 
 import config
 import config_train
@@ -37,7 +45,14 @@ def load_smp_model_func(model_info, device):
 	)
 	
 	checkpoint = torch.load(model_info["weights"], map_location=device)
-	model.load_state_dict(checkpoint["model_state_dict"])
+	state_dict = checkpoint["model_state_dict"]
+
+	clean_state_dict = {
+		k: v for k, v in state_dict.items() 
+		if not k.endswith('total_ops') and not k.endswith('total_params')
+	}
+	
+	model.load_state_dict(clean_state_dict)
 	model.to(device)
 	model.eval()
 	return model, cfg
@@ -72,7 +87,10 @@ class EvalDataset(torch.utils.data.Dataset):
 		new_mask[mask == 4] = 2                    # Vegetation
 		new_mask[mask == 2] = 3                    # Dynamic_Obstacle
 		
-		return image_bgr, new_mask
+		crop = A.CenterCrop(height=config.IMAGE_HEIGHT, width=config.IMAGE_WIDTH, p=1.0)
+		cropped = crop(image=image_bgr, mask=new_mask)
+
+		return cropped['image'], cropped['mask']
 
 # ======== ПОИСК ВСЕХ ОБУЧЕННЫХ МОДЕЛЕЙ ========
 def find_trained_models(base_dir):
@@ -131,7 +149,6 @@ def evaluate_model(model, model_info, dataset, device):
 	total_metrics = {k: {"intersection": 0, "union": 0, "tp": 0, "fp": 0, "fn": 0} for k in keys}
 	
 	eval_transform = A.Compose([
-		A.CenterCrop(height=480, width=640, p=1.0),
 		A.Normalize(),
 		ToTensorV2()
 	])
@@ -163,6 +180,9 @@ def evaluate_model(model, model_info, dataset, device):
 		if is_smp:
 			image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
 			augmented = eval_transform(image=image_rgb)
+
+			# ADDED
+			# print(augmented['image'].shape)
 			smp_tensor = augmented['image'].unsqueeze(0).to(device)
 			
 			start_event.record()
@@ -203,13 +223,16 @@ def evaluate_model(model, model_info, dataset, device):
 		total_time_ms += start_event.elapsed_time(end_event)
 		total_frames += 1
 		
-		pred_tensor = torch.from_numpy(pred_mask).unsqueeze(0).to(device)
-		true_tensor = torch.from_numpy(true_mask).unsqueeze(0).to(device)
+		pred_tensor = torch.from_numpy(pred_mask).squeeze().unsqueeze(0).to(device)
+		true_tensor = torch.from_numpy(true_mask).squeeze().unsqueeze(0).to(device)
 		
 		for cls in range(config_train.NUM_CLASSES):
 			pred_inds = (pred_tensor == cls)
 			target_inds = (true_tensor == cls)
 			
+			# ADDED
+			# print(pred_inds.shape, target_inds.shape)
+
 			intersection = (pred_inds & target_inds).sum().item()
 			union = (pred_inds | target_inds).sum().item()
 			fp = (pred_inds & ~target_inds).sum().item()
@@ -268,7 +291,7 @@ def evaluate_model(model, model_info, dataset, device):
 		"iou_any_obstacle": round(mean_ious["any_obstacle"], 4)
 	}
 
-# ======== ВИЗУАЛИЗАЦИЯ И СТРОИТЕЛЬСТВО ГРАФИКОВ ========
+# ======== ВИЗУАЛИЗАЦИЯ И ГРАФИКИ ========
 def plot_results(results, output_dir):
 	os.makedirs(output_dir, exist_ok=True)
 	
@@ -283,7 +306,7 @@ def plot_results(results, output_dir):
 	x = np.arange(len(names))
 	width = 0.25
 	
-	fig, ax = plt.subplots(figsize=(12, 6))
+	fig, ax = plt.subplots(figsize=(14, 8))
 	ax.bar(x - width, mIou, width, label='mIoU (Среднее по классам)', color='#00cec9')
 	ax.bar(x, precision, width, label='Safe Ground Precision (Безопасность)', color='#0984e3')
 	ax.bar(x + width, recall, width, label='Any Obstacle Recall (Обнаружение)', color='#d63031')
@@ -301,31 +324,40 @@ def plot_results(results, output_dir):
 	plt.close()
 	
 	# --- График 2: Диаграмма Парето (Скорость vs Безопасность) ---
-	plt.figure(figsize=(10, 6))
+	fig, ax = plt.subplots(figsize=(12, 6))
 	
 	for i in range(len(results)):
 		color = '#ff7675' if types[i] == 'yolo' else '#74b9ff'
 		marker = 's' if types[i] == 'yolo' else 'o'
-		plt.scatter(fps[i], precision[i], s=130, color=color, marker=marker, edgecolors='black', zorder=3)
-		plt.text(fps[i] + 0.8, precision[i] + 0.002, names[i], fontsize=8, zorder=4)
+		ax.scatter(fps[i], precision[i], s=130, color=color, marker=marker, edgecolors='black', zorder=3)
+		ax.text(fps[i], precision[i] + 0.002, str(i + 1), fontsize=10, fontweight='bold', ha='center', va='bottom', zorder=4)
 		
-	plt.xlabel('Скорость работы (FPS)')
-	plt.ylabel('Точность поиска безопасной зоны (Safe Ground Precision)')
-	plt.title('Парето-оптимизация: Баланс Скорости (FPS) и Безопасности посадки')
-	plt.grid(True, linestyle='--', alpha=0.5, zorder=1)
+	ax.set_xlabel('Скорость работы (FPS)')
+	ax.set_ylabel('Точность поиска безопасной зоны (Safe Ground Precision)')
+	ax.set_title('Парето-оптимизация: Баланс Скорости (FPS) и Безопасности посадки')
+	ax.grid(True, linestyle='--', alpha=0.5, zorder=1)
 	
 	legend_elements = [
 		Line2D([0], [0], marker='o', color='w', label='Модели PyTorch (SMP)', markerfacecolor='#74b9ff', markersize=10, markeredgecolor='black'),
-		Line2D([0], [0], marker='s', color='w', label='Модели YOLOv11', markerfacecolor='#ff7675', markersize=10, markeredgecolor='black')
+		Line2D([0], [0], marker='s', color='w', label='Модели YOLOv11', markerfacecolor='#ff7675', markersize=10, markeredgecolor='black'),
+		Line2D([0], [0], marker='', color='w', label=''),
+		Line2D([0], [0], marker='', color='w', label='Расшифровка точек (по mIoU):')
 	]
-	plt.legend(handles=legend_elements, loc='lower left')
 	
-	plt.tight_layout()
-	plt.savefig(os.path.join(output_dir, "speed_vs_safety_pareto.png"), dpi=150)
+	for i in range(len(results)):
+		legend_elements.append(Line2D([0], [0], marker='', color='w', label=f"{i + 1}: {names[i]}"))
+	
+	box = ax.get_position()
+	ax.set_position([box.x0, box.y0, box.width * 0.7, box.height])
+	
+	# Размещаем легенду за пределами графика
+	ax.legend(handles=legend_elements, loc='center left', bbox_to_anchor=(1.02, 0.5), fontsize=8)
+	
+	plt.savefig(os.path.join(output_dir, "speed_vs_safety_pareto.png"), dpi=150, bbox_inches='tight')
 	plt.close()
 	print(f"[*] Графики успешно сохранены в папку: {output_dir}")
 
-# ======== 6. ВЫВОД КРАСИВОЙ ТАБЛИЦЫ ========
+# ======== ВЫВОД ТАБЛИЧКИ ========
 def print_results_table(results):
 	cols = ["Model Name", "Type", "mIoU", "SG IoU", "SG Prec", "Obs Rec", "Latency (ms)", "FPS", "Params (M)", "MACs (G)"]
 	row_fmt = "{:<32} | {:<5} | {:<6} | {:<6} | {:<7} | {:<7} | {:<12} | {:<6} | {:<10} | {:<8}"

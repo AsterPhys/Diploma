@@ -1,4 +1,4 @@
-import gymnasium as gym
+﻿import gymnasium as gym
 import torch
 import torch.nn as nn
 from stable_baselines3 import PPO, SAC
@@ -231,23 +231,23 @@ class CurriculumCallback(BaseCallback):
 					self.steps_since_last_unlock = 0
 					self.save_state(save_buffer=False)
 
-				# Переход на следующий уровень
-				if all_routes_passed or force_upgrade_level:
-					reason = "ТАЙМАУТ УРОВНЯ" if force_upgrade_level else "УСПЕХ (Все маршруты уровня освоены)"
+			# Переход на следующий уровень
+			if all_routes_passed or force_upgrade_level:
+				reason = "ТАЙМАУТ УРОВНЯ" if force_upgrade_level else "УСПЕХ (Все маршруты уровня освоены)"
 				
-					new_lvl = (current_lvl + 1) % (max_lvl + 1)
+				new_lvl = (current_lvl + 1) % (max_lvl + 1)
 
-					print(f"\n=============================================")
-					print(f"!!! {reason} !!!")
-					print(f"Переход на уровень: level_{new_lvl}")
-					print(f"=============================================\n")
+				print(f"\n=============================================")
+				print(f"!!! {reason} !!!")
+				print(f"Переход на уровень: level_{new_lvl}")
+				print(f"=============================================\n")
 
-					env.set_level(new_lvl)
-					self.steps_in_current_level = 0
-					self.steps_since_last_unlock = 0
-					self.route_buffers.clear()
+				env.set_level(new_lvl)
+				self.steps_in_current_level = 0
+				self.steps_since_last_unlock = 0
+				self.route_buffers.clear()
 
-					sys.exit(42)
+				sys.exit(42)
 		
 		return True
 

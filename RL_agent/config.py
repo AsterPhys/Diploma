@@ -1,4 +1,4 @@
-# ==========================================
+﻿# ==========================================
 # Конфигурация для обучения RL-агента
 # ==========================================
 
@@ -40,7 +40,7 @@ DISTANCE_CLIP_THR = 20.0
 CLOSE2TARGET_REWARD_COEFF = 10.0
 
 # Логика динамического таймаута
-COEFF_ROUTE_STEPS = 2.5
+COEFF_ROUTE_STEPS = 3.5
 BASE_ROUTE_STEPS = 50
 
 # --- АРХИТЕКТУРА НЕЙРОСЕТИ ---
@@ -53,9 +53,9 @@ NN_VF_ARCH = [128, 128] # Слои для Critic
 # Как часто (в шагах) проверяем возможность смены уровня
 CL_CHECK_FREQ = 1024
 CL_SUCCESS_THRESHOLD = 0.6
-CL_WINDOW_SIZE_PER_ROUTE = 20
-CL_MAX_STEPS_PER_LEVEL = 400_384
-CL_MAX_STEPS_PER_ROUTE_UNLOCK = 1024 * 50
+CL_WINDOW_SIZE_PER_ROUTE = 10
+CL_MAX_STEPS_PER_LEVEL = 400_384 * 2
+CL_MAX_STEPS_PER_ROUTE_UNLOCK = 1024 * 100
 SAVE_FREQ_STEPS = 1024
 TOTAL_TIMESTEPS = 40_000_000
 

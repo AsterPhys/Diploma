@@ -1,4 +1,4 @@
-import os
+﻿import os
 import json
 import sys
 
@@ -21,7 +21,10 @@ def get_preset(mode):
 
 	if mode in ["rl_train", "rl_test"]:
 		view_mode = "NoDisplay" if mode == "rl_train" else "SpringArmChase"
-		clock_speed = 1.0 if mode == "rl_train" else 1.0
+		view_mode = "SpringArmChase"
+		visibility = False if mode == "rl_train" else True
+		visibility = True
+		clock_speed = 1.0
 
 		base_settings.update({
 			"ViewMode": view_mode,
@@ -42,7 +45,7 @@ def get_preset(mode):
 			},
 			"SubWindows": [
 				# SubWindow привязан к конкретной камере
-				{"WindowID": 0, "CameraName": "front_center", "ImageType": 1, "Visible": False}
+				{"WindowID": 0, "CameraName": "front_center", "ImageType": 1, "Visible": visibility}
 			]
 		})
 	elif mode in ["collect", "land"]:
